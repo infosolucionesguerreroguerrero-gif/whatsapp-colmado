@@ -1,0 +1,57 @@
+{
+  "name": "whatsapp-colmado",
+  "version": "1.0.0",
+  "description": "Sistema inteligente de pedidos por WhatsApp para colmado/minimarket (Node.js + Express + SQL Server + IA + ESC/POS). Clean Architecture, SOLID, Repository/Service/DTO patterns.",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "bot:console": "node scripts/console-bot.js",
+    "db:setup": "node scripts/db-setup.js",
+    "db:seed": "node scripts/db-setup.js --seed-only",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch"
+  },
+  "keywords": [
+    "whatsapp",
+    "colmado",
+    "pedidos",
+    "sql-server",
+    "esc-pos",
+    "ia",
+    "clean-architecture",
+    "node"
+  ],
+  "author": "infosolucionesGuerrero",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "joi": "^17.13.3",
+    "jsonwebtoken": "^9.0.2",
+    "mssql": "^11.0.1",
+    "pino": "^9.3.2",
+    "pino-pretty": "^11.2.2",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
+  },
+  "optionalDependencies": {
+    "@whiskeysockets/baileys": "^6.7.8",
+    "openai": "^4.56.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.4"
+  }
+}

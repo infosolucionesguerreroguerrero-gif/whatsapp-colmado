@@ -1,0 +1,4 @@
+node_modules/
+coverage/
+tickets/
+auth_info_baileys/
