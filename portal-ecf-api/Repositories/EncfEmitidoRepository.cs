@@ -213,18 +213,40 @@ WHERE e.ID = @Id;";
 
     public async Task GuardarXmlFirmadoAsync(long id, string xmlFirmado)
     {
+        // El XML firmado se guarda en una fila propia (TipoDocumento = 'Firmado');
+        // la fila con el XML original nunca se sobreescribe.
         const string sql = @"
 UPDATE d
 SET d.XmlDocumento = CAST(@Xml AS XML)
 FROM dbo.DocumentosXML d
 JOIN dbo.ECF e ON d.NCF = e.eNCF AND d.RncEmisor = e.RncEmisor
-WHERE e.ID = @Id;
+WHERE e.ID = @Id AND d.TipoDocumento = 'Firmado';
+
+IF @@ROWCOUNT = 0
+BEGIN
+    INSERT INTO dbo.DocumentosXML
+        (TipoDocumento, RncEmisor, RncReceptor, NCF, XmlDocumento, Estado, Ambiente, FechaCreacion)
+    SELECT 'Firmado', e.RncEmisor, e.RncComprador, e.eNCF, CAST(@Xml AS XML),
+           ISNULL(e.Estado, 'Pendiente'), ISNULL(e.Ambiente, 'TestECF'), SYSDATETIME()
+    FROM dbo.ECF e WHERE e.ID = @Id;
+END
 
 UPDATE dbo.ECF
 SET FechaHoraFirma = CONVERT(VARCHAR(20), SYSDATETIME(), 120)
 WHERE ID = @Id;";
 
         using var connection = _connectionFactory.CreateConnection();
-        await connection.ExecuteAsync(sql, new { Id = id, Xml = xmlFirmado });
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            await connection.ExecuteAsync(sql, new { Id = id, Xml = xmlFirmado }, transaction);
+            transaction.Commit();
+        }
+        catch
+        {
+            transaction.Rollback();
+            throw;
+        }
     }
 }

@@ -9,10 +9,17 @@ API REST en ASP.NET Core 8 (Dapper + SQL Server, sin Entity Framework) para rece
 
 ## Configuración
 
-Editar `appsettings.json`:
+Los secretos NO van en `appsettings.json` (se dejan vacíos en el repositorio); configurarlos con variables de entorno o user-secrets:
 
-- `ConnectionStrings:DefaultConnection` — conexión a la BD de producción.
-- `Jwt:Key` — clave secreta de al menos 32 caracteres (no subir al repositorio; usar variables de entorno o user-secrets).
+```bash
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=...;Database=...;User Id=...;Password=...;Encrypt=True;"
+dotnet user-secrets set "Jwt:Key" "<clave secreta de al menos 32 caracteres>"
+# o variables de entorno: ConnectionStrings__DefaultConnection y Jwt__Key
+```
+
+La aplicación falla al iniciar si faltan estos valores.
+
+Otras claves de `appsettings.json`:
 - `Dgii:*` — URLs base por ambiente (`TestECF`, `CerteCF`, `Producción`).
 - `Certificado:DiasAlertaVencimiento` — umbral de alerta de vencimiento (por defecto 30).
 

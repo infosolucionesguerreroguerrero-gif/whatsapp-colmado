@@ -44,11 +44,20 @@ SELECT TOP 1 u.Id, u.UserName, u.PasswordHash, u.rnc AS Rnc, u.RazonSocial
 FROM dbo.AspNetUsers u
 WHERE u.NormalizedUserName = @Usuario OR u.NormalizedEmail = @Usuario;";
 
+        // Si las tablas de roles de Identity no existen en la BD, se devuelve un conjunto
+        // vacío de forma determinista (sin capturar errores) y se asigna el rol 'Usuario'.
         const string sqlRoles = @"
-SELECT r.Name
-FROM dbo.AspNetUserRoles ur
-JOIN dbo.AspNetRoles r ON r.Id = ur.RoleId
-WHERE ur.UserId = @UserId;";
+IF OBJECT_ID('dbo.AspNetUserRoles', 'U') IS NOT NULL AND OBJECT_ID('dbo.AspNetRoles', 'U') IS NOT NULL
+BEGIN
+    SELECT r.Name
+    FROM dbo.AspNetUserRoles ur
+    JOIN dbo.AspNetRoles r ON r.Id = ur.RoleId
+    WHERE ur.UserId = @UserId;
+END
+ELSE
+BEGIN
+    SELECT CAST(NULL AS NVARCHAR(256)) WHERE 1 = 0;
+END;";
 
         using var connection = _connectionFactory.CreateConnection();
         var usuario = await connection.QuerySingleOrDefaultAsync<UsuarioLoginData>(sqlUsuario,
@@ -62,15 +71,7 @@ WHERE ur.UserId = @UserId;";
             throw new UnauthorizedAccessException("Credenciales inválidas.");
         }
 
-        List<string> roles;
-        try
-        {
-            roles = (await connection.QueryAsync<string>(sqlRoles, new { UserId = usuario.Id })).ToList();
-        }
-        catch
-        {
-            roles = new List<string>();
-        }
+        var roles = (await connection.QueryAsync<string>(sqlRoles, new { UserId = usuario.Id })).ToList();
         if (roles.Count == 0) roles.Add("Usuario");
 
         var claims = new List<Claim>
@@ -81,8 +82,10 @@ WHERE ur.UserId = @UserId;";
         if (!string.IsNullOrEmpty(usuario.Rnc)) claims.Add(new Claim("rnc", usuario.Rnc));
         claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]
-            ?? throw new InvalidOperationException("Jwt:Key no está configurado.")));
+        var jwtKey = _configuration["Jwt:Key"];
+        if (string.IsNullOrWhiteSpace(jwtKey))
+            throw new InvalidOperationException("Jwt:Key no está configurado.");
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
         var expira = DateTime.UtcNow.AddMinutes(_configuration.GetValue("Jwt:ExpiraMinutos", 60));
 
         var token = new JwtSecurityToken(

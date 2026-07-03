@@ -154,14 +154,14 @@ public class DocumentoFirmaService : IDocumentoFirmaService
     public async Task CambiarEstadoAsync(long documentoId, CambiarEstadoRequest request, string usuario)
     {
         if (!Validators.EsEstadoValido(request.NuevoEstado))
-            throw new AppValidationException("El estado indicado no es válido. Estados: Pendiente, EnProceso, Aceptado, Rechazado, Error, Anulado.");
+            throw new AppValidationException("El estado indicado no es válido. Estados: Pendiente, EnProceso, Aceptado, Aceptado Condicional, Rechazado, Error, Anulado.");
 
         var estadoActual = await _documentoRepository.GetEstadoActualAsync(documentoId)
             ?? throw new NotFoundException($"No existe el documento con id {documentoId}.");
 
         // Regla de negocio #6: los documentos aceptados solo se modifican por vía administrativa
         // (el controller exige rol Admin/Supervisor para este endpoint).
-        if (estadoActual == "Aceptado" && request.NuevoEstado != "Anulado")
+        if (estadoActual is "Aceptado" or "Aceptado Condicional" && request.NuevoEstado != "Anulado")
             throw new ConflictException("Un documento aceptado solo puede anularse mediante operación administrativa.");
 
         await _documentoRepository.CambiarEstadoAsync(documentoId, request.NuevoEstado, request.Comentario, usuario);

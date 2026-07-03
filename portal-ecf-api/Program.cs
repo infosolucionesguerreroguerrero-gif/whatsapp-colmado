@@ -32,8 +32,11 @@ builder.Services.AddScoped<ICertificacionService, CertificacionService>();
 builder.Services.AddHttpClient<IDgiiClient, DgiiClient>();
 
 // JWT Bearer
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("Jwt:Key no está configurado.");
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
+    throw new InvalidOperationException(
+        "Jwt:Key no está configurado o es demasiado corta (mínimo 32 caracteres). " +
+        "Defínala mediante variable de entorno (Jwt__Key) o user-secrets.");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

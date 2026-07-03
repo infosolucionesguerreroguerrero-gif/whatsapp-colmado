@@ -14,7 +14,7 @@ public static class Validators
 
     public static readonly IReadOnlySet<string> EstadosValidos = new HashSet<string>
     {
-        "Pendiente", "EnProceso", "Aceptado", "Rechazado", "Error", "Anulado"
+        "Pendiente", "EnProceso", "Aceptado", "Aceptado Condicional", "Rechazado", "Error", "Anulado"
     };
 
     public static bool EsRncValido(string? rnc) =>

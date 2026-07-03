@@ -17,8 +17,8 @@ SELECT
     d.RncEmisor,
     d.XmlDocumento.value('(//*[local-name()=""RazonSocialEmisor""])[1]', 'nvarchar(255)') AS RazonSocialEmisor,
     d.RncReceptor             AS RncComprador,
-    ISNULL(d.XmlDocumento.value('(//*[local-name()=""FechaEmision""])[1]', 'nvarchar(25)'), '') AS FechaEmisionTexto,
-    d.FechaCreacion           AS FechaEmision,
+    ISNULL(TRY_CONVERT(DATETIME, d.XmlDocumento.value('(//*[local-name()=""FechaEmision""])[1]', 'nvarchar(25)'), 105),
+           d.FechaCreacion)   AS FechaEmision,
     ISNULL(d.XmlDocumento.value('(//*[local-name()=""MontoTotal""])[1]', 'decimal(18,2)'), 0) AS MontoTotal,
     ISNULL(d.XmlDocumento.value('(//*[local-name()=""TotalITBIS""])[1]', 'decimal(18,2)'), 0) AS TotalItbis,
     d.Estado,
@@ -72,7 +72,7 @@ OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;";
 
     public async Task<EncfRecibidoResponse?> GetByIdAsync(long id)
     {
-        var sql = $"{SelectRecibido}\nWHERE d.Id = @Id;";
+        var sql = $"{SelectRecibido}\nWHERE d.Id = @Id AND d.TipoDocumento = 'Recibido';";
 
         using var connection = _connectionFactory.CreateConnection();
         return await connection.QuerySingleOrDefaultAsync<EncfRecibidoResponse>(sql, new { Id = id });

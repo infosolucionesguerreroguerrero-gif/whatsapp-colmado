@@ -9,8 +9,12 @@ public class SqlConnectionFactory : IDbConnectionFactory
 
     public SqlConnectionFactory(IConfiguration configuration)
     {
-        _connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection no está configurado.");
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException(
+                "ConnectionStrings:DefaultConnection no está configurado. " +
+                "Defínalo mediante variable de entorno (ConnectionStrings__DefaultConnection) o user-secrets.");
+        _connectionString = connectionString;
     }
 
     public IDbConnection CreateConnection() => new SqlConnection(_connectionString);
