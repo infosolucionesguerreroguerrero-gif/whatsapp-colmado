@@ -158,7 +158,7 @@ WHERE e.FechaHoraFirma IS NOT NULL
         using var multi = await connection.QueryMultipleAsync(sql, new
         {
             Term = term,
-            TermLike = $"%{term}%",
+            TermLike = $"%{EscapeLike(term)}%",
             Max = maxPorCategoria
         });
 
@@ -172,4 +172,8 @@ WHERE e.FechaHoraFirma IS NOT NULL
             DocumentosFirmados = (await multi.ReadAsync<SearchResultItemResponse>()).ToList()
         };
     }
+
+    // Escapa los comodines de LIKE de SQL Server ([, % y _) usando clases de caracteres.
+    private static string EscapeLike(string value) =>
+        value.Replace("[", "[[]").Replace("%", "[%]").Replace("_", "[_]");
 }

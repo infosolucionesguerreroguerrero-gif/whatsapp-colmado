@@ -159,13 +159,15 @@ VALUES (@EcfId, '', 'Pendiente', 'Documento creado', @Usuario, SYSDATETIME());";
     public async Task<string?> GetXmlAsync(long id, bool firmado)
     {
         // El XML (original o firmado) vive en dbo.DocumentosXML, vinculado por NCF + RncEmisor.
-        // Si @Firmado = 1 se exige que el ECF tenga FechaHoraFirma registrada.
+        // Si @Firmado = 1 se devuelve la fila TipoDocumento = 'Firmado' (y se exige FechaHoraFirma);
+        // si @Firmado = 0 se excluye la fila firmada para devolver el XML original.
         const string sql = @"
 SELECT TOP 1 CAST(d.XmlDocumento AS NVARCHAR(MAX))
 FROM dbo.ECF e
 JOIN dbo.DocumentosXML d ON d.NCF = e.eNCF AND d.RncEmisor = e.RncEmisor
 WHERE e.ID = @Id
-  AND (@Firmado = 0 OR e.FechaHoraFirma IS NOT NULL)
+  AND ((@Firmado = 1 AND d.TipoDocumento = 'Firmado' AND e.FechaHoraFirma IS NOT NULL)
+    OR (@Firmado = 0 AND d.TipoDocumento <> 'Firmado'))
 ORDER BY d.FechaCreacion DESC;";
 
         using var connection = _connectionFactory.CreateConnection();

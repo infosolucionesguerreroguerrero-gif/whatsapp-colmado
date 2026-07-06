@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PortalEcf.Api.Common;
 using PortalEcf.Api.Dtos;
 using PortalEcf.Api.Services;
@@ -20,6 +21,7 @@ public class AuthController : ControllerBase
     /// <summary>Autenticación con usuario/clave (dbo.AspNetUsers). Devuelve un JWT.</summary>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting("login")]
     public async Task<ActionResult<ApiResponse<LoginResponse>>> Login([FromBody] LoginRequest request)
     {
         var data = await _service.LoginAsync(request);

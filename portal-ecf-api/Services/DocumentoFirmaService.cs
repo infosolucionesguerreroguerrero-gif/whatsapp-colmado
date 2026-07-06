@@ -48,7 +48,7 @@ public class DocumentoFirmaService : IDocumentoFirmaService
             var documento = await _emitidoRepository.GetByIdAsync(request.DocumentoId.Value)
                 ?? throw new NotFoundException($"No existe el documento con id {request.DocumentoId}.");
 
-            if (documento.Estado == "Aceptado")
+            if (documento.Estado is "Aceptado" or "Aceptado Condicional")
                 throw new ConflictException("No se puede volver a firmar un documento aceptado.");
 
             encf = documento.Encf;

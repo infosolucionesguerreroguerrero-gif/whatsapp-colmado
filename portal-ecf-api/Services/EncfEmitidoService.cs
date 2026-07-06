@@ -80,7 +80,7 @@ public class EncfEmitidoService : IEncfEmitidoService
         var documento = await GetByIdAsync(id);
 
         // Regla de negocio #6: no modificar documentos aceptados.
-        if (documento.Estado == "Aceptado")
+        if (documento.Estado is "Aceptado" or "Aceptado Condicional")
             throw new ConflictException("El documento ya fue aceptado por la DGII.");
 
         if (!reenvio && documento.Estado == "EnProceso")
