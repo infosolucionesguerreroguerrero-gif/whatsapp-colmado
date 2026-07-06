@@ -119,7 +119,7 @@ VALUES
         const string sql = @"
 SELECT CAST(d.XmlDocumento AS NVARCHAR(MAX))
 FROM dbo.DocumentosXML d
-WHERE d.Id = @Id;";
+WHERE d.Id = @Id AND d.TipoDocumento = 'Recibido';";
 
         using var connection = _connectionFactory.CreateConnection();
         return await connection.ExecuteScalarAsync<string?>(sql, new { Id = id });
@@ -133,7 +133,7 @@ SET Estado = @Estado,
     FechaRespuesta = SYSDATETIME(),
     Observaciones = CONCAT(ISNULL(Observaciones, ''), CHAR(13), CHAR(10),
         CONVERT(VARCHAR(20), SYSDATETIME(), 120), ' [', @Usuario, '] ', ISNULL(@Comentario, ''))
-WHERE Id = @Id;";
+WHERE Id = @Id AND TipoDocumento = 'Recibido';";
 
         using var connection = _connectionFactory.CreateConnection();
         await connection.ExecuteAsync(sql, new { Id = id, Estado = estado, Comentario = comentario, Usuario = usuario });
