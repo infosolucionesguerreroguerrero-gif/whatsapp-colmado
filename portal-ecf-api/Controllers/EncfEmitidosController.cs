@@ -13,10 +13,12 @@ namespace PortalEcf.Api.Controllers;
 public class EncfEmitidosController : ControllerBase
 {
     private readonly IEncfEmitidoService _service;
+    private readonly IEcfPdfService _pdfService;
 
-    public EncfEmitidosController(IEncfEmitidoService service)
+    public EncfEmitidosController(IEncfEmitidoService service, IEcfPdfService pdfService)
     {
         _service = service;
+        _pdfService = pdfService;
     }
 
     private string Usuario => User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "sistema";
@@ -64,13 +66,12 @@ public class EncfEmitidosController : ControllerBase
         return File(System.Text.Encoding.UTF8.GetBytes(xml), "application/xml", $"encf-{id}.xml");
     }
 
-    /// <summary>Descarga la representación impresa en PDF (requiere generador de PDF).</summary>
+    /// <summary>Descarga la representación impresa (PDF) del e-CF.</summary>
     [HttpGet("{id:long}/pdf")]
     public async Task<IActionResult> GetPdf(long id)
     {
-        _ = await _service.GetByIdAsync(id);
-        // TODO: integrar generador de PDF (ej. QuestPDF) con la representación impresa del e-CF.
-        return StatusCode(StatusCodes.Status501NotImplemented,
-            ApiResponse.Fail("La generación de PDF aún no está implementada."));
+        var documento = await _service.GetByIdAsync(id);
+        var pdf = await _pdfService.GenerarAsync(id);
+        return File(pdf, "application/pdf", $"{documento.Encf}.pdf");
     }
 }

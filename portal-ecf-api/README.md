@@ -20,7 +20,7 @@ dotnet user-secrets set "Jwt:Key" "<clave secreta de al menos 32 caracteres>"
 La aplicación falla al iniciar si faltan estos valores.
 
 Otras claves de `appsettings.json`:
-- `Dgii:*` — URLs base por ambiente (`TestECF`, `CerteCF`, `Producción`).
+- `Dgii:*` — URLs base por ambiente (`TestECF`, `CerteCF`, `Producción`), `TimeoutSegundos`, `RncEmisor` (RNC cuyo certificado se usa para autenticarse; si se deja vacío se toma el primer certificado vigente) y `Dgii:Paths:*` con las rutas relativas de cada servicio de la DGII (semilla, validar semilla, recepción, consulta de estado, consulta de e-CF y estatus de servicios), configurables sin recompilar.
 - `Certificado:DiasAlertaVencimiento` — umbral de alerta de vencimiento (por defecto 30).
 
 ## Ejecución
@@ -57,8 +57,30 @@ El esquema actual no tiene tablas de historial de estados ni de logs de comunica
 
 `POST /api/auth/login` valida usuario/clave contra `dbo.AspNetUsers` (hash de ASP.NET Core Identity) y emite un JWT. Roles desde `dbo.AspNetUserRoles`/`dbo.AspNetRoles` si existen; por defecto rol `Usuario`. Los endpoints sensibles requieren `[Authorize]`; cambios manuales de estado requieren rol `Admin` o `Supervisor`; registrar certificados requiere `Admin`.
 
+## Integración con la DGII
+
+`DgiiClient` consume los servicios reales de la DGII. La autenticación (`DgiiAuthenticator`) hace el ciclo
+semilla → firma de la semilla con el certificado digital → canje por token bearer, y reutiliza el token
+mientras esté vigente (se renueva automáticamente y ante un 401). Cada request/response se registra en
+`dbo.LogsDgii`. Operaciones soportadas: envío del e-CF firmado (multipart `{RNCEmisor}{eNCF}.xml`),
+consulta de estado por TrackId, consulta de e-NCF y estatus de los servicios.
+
+El token se cachea en memoria del proceso; no se persiste en `dbo.DgiiTokens`.
+
+## Firma digital
+
+`XmlSignatureService` firma con XML-DSig envuelto (RSA-SHA256, C14N, `KeyInfo/X509Data`) usando el
+certificado de `dbo.AspNetUsers` que corresponda al RNC emisor del documento, y agrega el nodo
+`<Signature>` como último hijo del elemento raíz. `POST /api/documentos/validar-firma` verifica la firma
+con `SignedXml.CheckSignature` contra el certificado incluido en la firma e informa si está fuera de vigencia.
+
+## Representación impresa (PDF)
+
+`GET /api/encf/emitidos/{id}/pdf` genera la representación impresa con QuestPDF (licencia Community):
+datos del emisor y del comprador, e-NCF, código de seguridad, TrackId, detalle de líneas leído del XML
+(firmado si existe) y totales. En Linux requiere las fuentes del sistema (`libfontconfig1`).
+
 ## Pendientes / TODO
 
-- `DgiiClient` es un stub desacoplado mediante `IDgiiClient`: implementar la integración real (semilla, firma de semilla, token, envío y consulta) según los servicios de la DGII.
-- Firma XML-DSig real en `DocumentoFirmaService` (estructura y persistencia ya implementadas).
-- Generación de PDF (representación impresa) del e-CF.
+- Sello QR y código de seguridad calculado sobre la firma en la representación impresa.
+- Persistir los tokens de la DGII en `dbo.DgiiTokens` para compartirlos entre instancias.
