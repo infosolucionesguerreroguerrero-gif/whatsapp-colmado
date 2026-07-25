@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Xml.Linq;
 using PortalEcf.Api.Common;
 using PortalEcf.Api.Dtos;
@@ -18,22 +16,25 @@ public interface IDocumentoFirmaService
 }
 
 /// <summary>
-/// Servicio de firma de documentos e-CF.
-/// La firma real debe implementarse con XML-DSig usando el certificado digital
-/// (System.Security.Cryptography.Xml.SignedXml + X509Certificate2 del .p12).
-/// Aquí se deja la estructura completa con la firma marcada como TODO.
+/// Servicio de firma de documentos e-CF con XML-DSig (firma envuelta, RSA-SHA256)
+/// usando el certificado digital de la empresa almacenado en dbo.AspNetUsers.
 /// </summary>
 public class DocumentoFirmaService : IDocumentoFirmaService
 {
     private readonly IDocumentoRepository _documentoRepository;
     private readonly IEncfEmitidoRepository _emitidoRepository;
+    private readonly ICertificadoProvider _certificadoProvider;
+    private readonly IXmlSignatureService _firmaService;
     private readonly ILogger<DocumentoFirmaService> _logger;
 
     public DocumentoFirmaService(IDocumentoRepository documentoRepository,
-        IEncfEmitidoRepository emitidoRepository, ILogger<DocumentoFirmaService> logger)
+        IEncfEmitidoRepository emitidoRepository, ICertificadoProvider certificadoProvider,
+        IXmlSignatureService firmaService, ILogger<DocumentoFirmaService> logger)
     {
         _documentoRepository = documentoRepository;
         _emitidoRepository = emitidoRepository;
+        _certificadoProvider = certificadoProvider;
+        _firmaService = firmaService;
         _logger = logger;
     }
 
@@ -65,18 +66,22 @@ public class DocumentoFirmaService : IDocumentoFirmaService
             throw new AppValidationException("Debe indicar documentoId o xmlContenido.");
         }
 
+        XDocument documentoXml;
         try
         {
-            XDocument.Parse(xml);
+            documentoXml = XDocument.Parse(xml);
         }
         catch (Exception ex)
         {
             throw new AppValidationException("El XML a firmar no es válido.", new[] { ex.Message });
         }
 
-        // TODO: firma real con XML-DSig y el certificado activo (X509Certificate2).
-        var xmlFirmado = xml; // reemplazar por el XML con el nodo <Signature>
-        var huella = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(xmlFirmado)));
+        rncEmisor ??= documentoXml.Descendants()
+            .FirstOrDefault(e => e.Name.LocalName.Equals("RNCEmisor", StringComparison.OrdinalIgnoreCase))?.Value.Trim();
+
+        using var certificado = await _certificadoProvider.GetCertificadoAsync(rncEmisor);
+        var xmlFirmado = _firmaService.Firmar(xml, certificado);
+        var huella = certificado.Thumbprint;
 
         var firmaId = await _documentoRepository.RegistrarFirmaAsync(request.DocumentoId, encf, rncEmisor, xmlFirmado, huella, usuario);
 
@@ -117,22 +122,13 @@ public class DocumentoFirmaService : IDocumentoFirmaService
             throw new AppValidationException("Debe indicar documentoId o xmlContenido.");
         }
 
-        // TODO: validación real con SignedXml.CheckSignature(certificado).
-        XDocument documento;
-        try
-        {
-            documento = XDocument.Parse(xml);
-        }
-        catch (Exception ex)
-        {
-            return new ValidarFirmaResponse { FirmaValida = false, Detalle = $"XML inválido: {ex.Message}" };
-        }
-
-        var tieneFirma = documento.Descendants().Any(e => e.Name.LocalName == "Signature");
+        var resultado = _firmaService.Validar(xml);
         return new ValidarFirmaResponse
         {
-            FirmaValida = tieneFirma,
-            Detalle = tieneFirma ? "El documento contiene una firma XML." : "El documento no contiene nodo Signature."
+            FirmaValida = resultado.Valida,
+            Detalle = resultado.Detalle,
+            HuellaCertificado = resultado.Huella,
+            FechaFirma = resultado.FechaFirma
         };
     }
 

@@ -31,7 +31,21 @@ builder.Services.AddScoped<IEncfEmitidoService, EncfEmitidoService>();
 builder.Services.AddScoped<IEncfRecibidoService, EncfRecibidoService>();
 builder.Services.AddScoped<IDocumentoFirmaService, DocumentoFirmaService>();
 builder.Services.AddScoped<ICertificacionService, CertificacionService>();
-builder.Services.AddHttpClient<IDgiiClient, DgiiClient>();
+builder.Services.AddScoped<ICertificadoProvider, CertificadoProvider>();
+builder.Services.AddSingleton<IXmlSignatureService, XmlSignatureService>();
+builder.Services.AddScoped<IEcfPdfService, EcfPdfService>();
+
+// Comunicación con los servicios web de la DGII
+builder.Services.Configure<DgiiSettings>(builder.Configuration.GetSection(DgiiSettings.SectionName));
+
+var dgiiTimeout = TimeSpan.FromSeconds(
+    builder.Configuration.GetValue($"{DgiiSettings.SectionName}:TimeoutSegundos", 60));
+
+builder.Services.AddHttpClient<IDgiiAuthenticator, DgiiAuthenticator>(c => c.Timeout = dgiiTimeout);
+builder.Services.AddHttpClient<IDgiiClient, DgiiClient>(c => c.Timeout = dgiiTimeout);
+
+// QuestPDF, licencia comunitaria (gratuita para empresas con ingresos < US$1M).
+QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
 // JWT Bearer
 var jwtKey = builder.Configuration["Jwt:Key"];
