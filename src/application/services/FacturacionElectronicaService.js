@@ -12,6 +12,27 @@ const path = require('path');
  * por las implementaciones reales cuando se tengan los algoritmos
  * equivalentes.
  */
+/**
+ * Conversión a JavaScript de TFirmaDigital / FirmarXml.
+ */
+class FirmaDigital {
+  constructor(_owner) {
+    // En Delphi se pasaba el formulario padre (self); no aplica en Node.js.
+  }
+
+  /**
+   * Equivalente a firmaxml.ReciboDatosFirma(archivoxml, rutaCertificado, claveCertificado).
+   *
+   * @param {string} archivoXml - Ruta del XML a firmar.
+   * @param {string} rutaCertificado - Ruta del certificado digital (.p12/.pfx).
+   * @param {string} claveCertificado - Contraseña del certificado.
+   */
+  async reciboDatosFirma(_archivoXml, _rutaCertificado, _claveCertificado) {
+    // TODO: implementar firma XML-DSig con el certificado digital.
+    throw new Error('Pendiente: FirmaDigital.reciboDatosFirma');
+  }
+}
+
 class FacturacionElectronicaService {
   constructor({ config, db, logger = console }) {
     this.config = config;
@@ -387,8 +408,13 @@ class FacturacionElectronicaService {
     this.noElije = 0;
   }
 
-  async firmarXml(_rutaXml) {
-    // TODO: firmar XML-DSig y actualizar this.fechaFirma.
+  async firmarXml(rutaXml) {
+    this.logger.info('Proceso de Firma del Documento');
+
+    const firmaXml = new FirmaDigital(this);
+    await firmaXml.reciboDatosFirma(rutaXml, this.rutaCertificado, this.claveCertificado);
+
+    this.logger.info('Factura Firmada Correctamente');
     this.fechaFirma = new Date().toISOString();
   }
 
