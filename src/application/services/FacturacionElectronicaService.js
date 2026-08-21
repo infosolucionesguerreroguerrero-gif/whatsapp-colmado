@@ -1,6 +1,8 @@
 'use strict';
 
+const fs = require('fs').promises;
 const path = require('path');
+const util = require('util');
 
 /**
  * Conversión a JavaScript del procedimiento de facturación electrónica
@@ -385,7 +387,8 @@ class FacturacionElectronicaService {
   }
 
   // ---------------------------------------------------------------------------
-  // Métodos auxiliares (stubs). Deben reemplazarse por implementaciones reales.
+  // Helpers HTTP / XML / firma. Algunos aún requieren la implementación real
+  // de firma XML-DSig y generación de e-CF; los métodos de red usan fetch.
   // ---------------------------------------------------------------------------
 
   async hayInternet() {
@@ -427,19 +430,174 @@ class FacturacionElectronicaService {
     // TODO: generar XML resumen E32 para facturas < RD$250,000.
   }
 
-  async enviarFacturaXml(_token, _rutaXml) {
-    // TODO: POST a this.urlRecepcion; retornar [codigoHttp, trackId, ...].
-    return ['200', 'track_pendiente', '', '', '', '', '', ''];
+  /**
+   * Envía el XML firmado a la DGII usando peticionHttp.
+   * Equivalente aproximado de ENVIAR_FACTURA_XML.
+   *
+   * @param {string} token - Bearer token de autenticación.
+   * @param {string} rutaXml - Ruta del XML a enviar.
+   * @returns {Promise<string[]>} [codigoHttp, contenidoRespuesta, ''].
+   */
+  async enviarFacturaXml(token, rutaXml) {
+    const datos = await this.peticionHttp({
+      url: this.urlRecepcion,
+      metodo: 'POST',
+      token,
+      archivo: rutaXml,
+    });
+
+    // Intenta extraer el TrackId si la respuesta es JSON.
+    try {
+      const json = JSON.parse(datos[1]);
+      this.trackId = json.trackId || json.TrackId || this.trackId;
+    } catch {
+      // La respuesta no es JSON o no contiene trackId.
+    }
+
+    return datos;
   }
 
-  async consultarTrackId(_token, _trackId, _url) {
-    // TODO: GET a url_consultaemision; retornar array con estado, secuencia, etc.
-    return ['200', 'ACEPTADO', '', '', '0000000001', new Date().toISOString(), 'Procesado', '0'];
+  /**
+   * Petición HTTP genérica. Conversión de peticionHttp(envioPeticion).
+   *
+   * @param {object} params
+   * @param {string} params.url
+   * @param {string} params.metodo - 'GET' | 'POST' | etc.
+   * @param {string} [params.token]
+   * @param {string} [params.archivo] - Ruta del archivo a adjuntar como 'xml'.
+   * @returns {Promise<string[]>} [codigoHttp, contenido, ''].
+   */
+  async peticionHttp({ url, metodo, token, archivo }) {
+    const datosObtenidos = [];
+
+    if (!url) {
+      this.logger.error('!!Error!! Falta la URL de la peticion');
+      return ['!!ERROR!!', 'Falta la Url de la peticion', ''];
+    }
+    if (!metodo) {
+      this.logger.error('!!Error!! Falta el METODO de la peticion');
+      return ['!!ERROR!!', 'Falta El Metodo del llamado a la url', ''];
+    }
+
+    const method = metodo.toUpperCase();
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    let body;
+    if (archivo && ['POST', 'PUT', 'PATCH'].includes(method)) {
+      const buffer = await fs.readFile(archivo);
+      const blob = new Blob([buffer], { type: 'application/xml' });
+      const formData = new FormData();
+      formData.append('xml', blob, path.basename(archivo));
+      body = formData;
+    }
+
+    const response = await fetch(url, { method, headers, body });
+    const content = await response.text();
+
+    const statusCode = response.status;
+    datosObtenidos.push(String(statusCode));
+    datosObtenidos.push(content);
+    datosObtenidos.push('');
+
+    if (statusCode !== 200) {
+      this.logger.error(`MENSAJE DE ERROR: ${content}`);
+    }
+
+    return datosObtenidos;
   }
 
-  async enviarXmlHosting(_rutaXml, _url, _credenciales, _estado, _mensaje, _ambiente) {
-    // TODO: POST al portal/hosting propio.
-    return 'XML enviado al hosting';
+  /**
+   * Consulta estado de un TrackId. Conversión de MostrarResultadoTrackId.
+   *
+   * @param {string} token
+   * @param {string} trackId
+   * @param {string} _url - Ignorado en el original; se usa URL fija de testecf.
+   * @returns {Promise<string[]>} [contenido]
+   */
+  async mostrarResultadoTrackId(token, trackId, _url) {
+    const url = `https://ecf.dgii.gov.do/testecf/consultaresultado/api/Consultas/Estado?TrackId=${encodeURIComponent(trackId)}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const content = await response.text();
+    return [content];
+  }
+
+  /**
+   * Consulta estado de un TrackId y parsea la respuesta JSON.
+   * Conversión de ConsultarTrackId.
+   *
+   * @param {string} token
+   * @param {string} trackId
+   * @param {string} url
+   * @returns {Promise<string[]>} Array con status y campos parseados.
+   */
+  async consultarTrackId(token, trackId, url) {
+    const fullUrl = `${url}?TrackId=${encodeURIComponent(trackId)}`;
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const content = await response.text();
+    const datosObtenidos = [String(response.status)];
+
+    if (response.status === 200) {
+      const json = JSON.parse(content);
+      const extraer = (key) => (json[key] !== undefined && json[key] !== null ? String(json[key]) : '');
+
+      datosObtenidos.push(extraer('estado'));
+      datosObtenidos.push(extraer('rnc'));
+      datosObtenidos.push(extraer('encf'));
+      datosObtenidos.push(extraer('secuenciaUtilizada'));
+      datosObtenidos.push(extraer('fechaRecepcion'));
+      datosObtenidos.push(extraer('mensajes'));
+      datosObtenidos.push(extraer('codigo'));
+    }
+
+    datosObtenidos.push(content);
+    return datosObtenidos;
+  }
+
+  /**
+   * Envía el XML a un portal/hosting propio vía multipart con Basic Auth.
+   * Conversión de EnviarXMLHosting.
+   *
+   * @param {string} archivo - Ruta del XML.
+   * @param {string} urlFormat - URL con placeholders %s para estado, comentario, ambiente.
+   * @param {string} credenciales - Usuario:contraseña en claro.
+   * @param {string} estado
+   * @param {string} comentario
+   * @param {string} ambiente
+   * @returns {Promise<string>} Respuesta del servidor.
+   */
+  async enviarXmlHosting(archivo, urlFormat, credenciales, estado, comentario, ambiente) {
+    if (!archivo) {
+      return 'Error: no se proporcionó archivo';
+    }
+
+    const url = util.format(urlFormat, estado, comentario, ambiente);
+    const auth = Buffer.from(credenciales).toString('base64');
+
+    const buffer = await fs.readFile(archivo);
+    const blob = new Blob([buffer], { type: 'application/xml' });
+    const formData = new FormData();
+    formData.append('xml', blob, path.basename(archivo));
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { authorization: `Basic ${auth}` },
+      body: formData,
+    });
+
+    const text = await response.text();
+    return response.status === 200
+      ? `Respuesta del Servidor: ${text}`
+      : `Error: ${text}`;
   }
 
   async grabaEnDb(_factura) {
