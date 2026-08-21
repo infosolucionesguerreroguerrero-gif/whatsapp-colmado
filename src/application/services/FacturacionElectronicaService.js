@@ -173,7 +173,7 @@ class FacturacionElectronicaService {
 
     this.FRCE = '';
 
-    if (factura.tipoCom === 32 && factura.neto > 250000) {
+    if (factura.tipoCom === 32 && factura.montoTotal > 250000) {
       if (!factura.clienteRnc || String(factura.clienteRnc).trim() === '') {
         throw new Error('!!Error!! Para las Ventas de Consumo Mayor a RD$250,000.00 es Requerido el Rnc o Cedula del Cliente..');
       }
@@ -207,9 +207,7 @@ class FacturacionElectronicaService {
 
     this.FRCE = '';
 
-    const total1 = factura.neto;
-
-    if (factura.tipoCom === 32 && total1 < 250000) {
+    if (factura.tipoCom === 32 && factura.montoTotal < 250000) {
       res = await this.obtenerSemillaFirmada();
       if (res === 200) {
         resultado = await this.obtenerTokenDigital(1);
@@ -273,9 +271,15 @@ class FacturacionElectronicaService {
             }
           } else if (factura.tipoCom === 32 && factura.montoTotal < 250000) {
             respuesta = resultado[0];
-            this.encfCodigo = resultado[2];
-            this.encfEstado = resultado[3];
-            this.encfMensajes = resultado[4];
+            let respuestaRecepcion = {};
+            try {
+              respuestaRecepcion = JSON.parse(resultado[1] || '{}');
+            } catch {
+              respuestaRecepcion = {};
+            }
+            this.encfCodigo = String(respuestaRecepcion.codigo || respuestaRecepcion.Codigo || '');
+            this.encfEstado = String(respuestaRecepcion.estado || respuestaRecepcion.Estado || '');
+            this.encfMensajes = String(respuestaRecepcion.mensajes || respuestaRecepcion.Mensajes || '');
 
             this.logger.info(`Estado del Comprobante: ${this.encfEstado} Mensaje:${this.encfMensajes}`);
             await this.sleep(1500);
@@ -317,7 +321,7 @@ class FacturacionElectronicaService {
     let re;
     const enviarAHosting = this.config.enviarXmlAHosting === 'S' || this.config.enviarXmlAHosting === true;
     if (enviarAHosting) {
-      const archivoAEnviar = (factura.tipoCom === 32 && total1 < 250000)
+      const archivoAEnviar = (factura.tipoCom === 32 && factura.montoTotal < 250000)
         ? this.nombreArchivoMenor250k
         : nombreArchivo;
 
