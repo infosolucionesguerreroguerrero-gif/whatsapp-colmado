@@ -323,7 +323,7 @@ class FacturacionElectronicaService {
 
         nombreArchivo = path.join(this.rutaSistema, `${this.rncEmisor}${factura.encfNumero}.xml`);
 
-        resultado = await this.enviarFacturaXml(this.token, nombreArchivo);
+        resultado = await this.enviarFacturaXml(this.token, nombreArchivo, factura);
         this.logger.info('Documento Enviado Correctamente....');
 
         await this.sleep(1500);
@@ -489,13 +489,60 @@ class FacturacionElectronicaService {
   }
 
   async obtenerSemillaFirmada() {
-    // TODO: consumir this.urlCrearSemilla + this.urlValidarSemilla.
-    throw new Error('Pendiente: obtenerSemillaFirmada');
+    const respuestaLista = await this.peticionHttp({
+      url: this.urlCrearSemilla,
+      metodo: 'GET',
+    });
+
+    const codigoResultado = respuestaLista[0];
+    const contenido = respuestaLista[1] || '';
+
+    if (codigoResultado === '200') {
+      await fs.mkdir(this.rutaSistema, { recursive: true });
+      const rutaxml = path.join(this.rutaSistema, 'semillafirmada.xml');
+      await fs.writeFile(rutaxml, contenido, 'utf8');
+
+      this.logger.info('...Firmando la Semilla Descargada');
+      const firmaXml = new FirmaDigital(this);
+      await firmaXml.reciboDatosFirma(rutaxml, this.rutaCertificado, this.claveCertificado);
+      this.logger.info('Semilla Firmada Correctamente');
+      return 200;
+    }
+
+    this.logger.error('!!Error!! No se Pudo Realizar la Peticion, Servidor HTTP No responde..');
+    return Number(codigoResultado) || 0;
   }
 
-  async obtenerTokenDigital(_tipo) {
-    // TODO: autenticación con el certificado digital.
-    return ['200', 'token_pendiente'];
+  async obtenerTokenDigital(_numero) {
+    const rutaxml = path.join(this.rutaSistema, 'semillafirmada.xml');
+
+    const respuestaLista = await this.peticionHttp({
+      url: this.urlValidarSemilla,
+      metodo: 'POST',
+      token: '',
+      archivo: rutaxml,
+    });
+
+    const codigoResultado = respuestaLista[0];
+    const datosObtenidos = [codigoResultado];
+
+    if (codigoResultado === '200') {
+      let originalObjet = {};
+      try {
+        originalObjet = JSON.parse(respuestaLista[1] || '{}');
+      } catch {
+        originalObjet = {};
+      }
+
+      this.token = String(originalObjet.token || originalObjet.Token || '');
+      datosObtenidos.push(this.token);
+      datosObtenidos.push(String(originalObjet.expedido || originalObjet.Expedido || ''));
+      datosObtenidos.push(String(originalObjet.expira || originalObjet.Expira || ''));
+    } else {
+      datosObtenidos.push('!!Error!! No se Pudo Realizar la Peticion, Servidor HTTP No responde..');
+    }
+
+    return datosObtenidos;
   }
 
   async generarXmlTipoE31Produccion(_factura) {
@@ -524,29 +571,58 @@ class FacturacionElectronicaService {
 
   /**
    * Envía el XML firmado a la DGII usando peticionHttp.
-   * Equivalente aproximado de ENVIAR_FACTURA_XML.
+   * Equivalente a ENVIAR_FACTURA_XML.
    *
    * @param {string} token - Bearer token de autenticación.
    * @param {string} rutaXml - Ruta del XML a enviar.
-   * @returns {Promise<string[]>} [codigoHttp, contenidoRespuesta, ''].
+   * @param {object} factura - Datos de la factura (tipoCom, montoTotal).
+   * @returns {Promise<string[]>} Lista con código, contenido y campos parseados.
    */
-  async enviarFacturaXml(token, rutaXml) {
-    const datos = await this.peticionHttp({
-      url: this.urlRecepcion,
+  async enviarFacturaXml(token, rutaXml, factura) {
+    if (this.FRCE === 'S') {
+      return [];
+    }
+
+    let url = this.urlRecepcion;
+    if (factura.tipoCom === 32 && factura.montoTotal < 250000) {
+      url = this.urlRecepcionFc;
+    }
+
+    const respuestaLista = await this.peticionHttp({
+      url,
       metodo: 'POST',
       token,
       archivo: rutaXml,
     });
 
-    // Intenta extraer el TrackId si la respuesta es JSON.
-    try {
-      const json = JSON.parse(datos[1]);
-      this.trackId = json.trackId || json.TrackId || this.trackId;
-    } catch {
-      // La respuesta no es JSON o no contiene trackId.
+    const codigoResultado = respuestaLista[0];
+    const datosObtenidos = [codigoResultado];
+    datosObtenidos.push(respuestaLista[1] || '');
+
+    if (codigoResultado === '200') {
+      let originalObjet = {};
+      try {
+        originalObjet = JSON.parse(respuestaLista[1] || '{}');
+      } catch {
+        originalObjet = {};
+      }
+
+      if (factura.tipoCom !== 32 || (factura.tipoCom === 32 && factura.montoTotal > 250000)) {
+        this.trackId = String(originalObjet.trackId || originalObjet.TrackId || '');
+        datosObtenidos.push(this.trackId);
+        datosObtenidos.push(String(originalObjet.error || originalObjet.Error || ''));
+        datosObtenidos.push(String(originalObjet.mensaje || originalObjet.Mensaje || ''));
+      } else {
+        this.encfCodigo = String(originalObjet.codigo || originalObjet.Codigo || '');
+        this.encfEstado = String(originalObjet.estado || originalObjet.Estado || '');
+        this.encfMensajes = String(originalObjet.mensajes || originalObjet.Mensajes || '');
+        datosObtenidos.push(this.encfCodigo);
+        datosObtenidos.push(this.encfEstado);
+        datosObtenidos.push(this.encfMensajes);
+      }
     }
 
-    return datos;
+    return datosObtenidos;
   }
 
   /**
