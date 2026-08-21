@@ -3,6 +3,8 @@
 const fs = require('fs').promises;
 const path = require('path');
 const util = require('util');
+const { SignedXml } = require('xml-crypto');
+const forge = require('node-forge');
 
 /**
  * Conversión a JavaScript del procedimiento de facturación electrónica
@@ -18,8 +20,8 @@ const util = require('util');
  * Conversión a JavaScript de TFirmaDigital / FirmarXml.
  */
 class FirmaDigital {
-  constructor(_owner) {
-    // En Delphi se pasaba el formulario padre (self); no aplica en Node.js.
+  constructor(owner) {
+    this.owner = owner;
   }
 
   /**
@@ -28,10 +30,96 @@ class FirmaDigital {
    * @param {string} archivoXml - Ruta del XML a firmar.
    * @param {string} rutaCertificado - Ruta del certificado digital (.p12/.pfx).
    * @param {string} claveCertificado - Contraseña del certificado.
+   * @returns {Promise<string>} 'Proceso Realizado' si todo sale bien.
    */
-  async reciboDatosFirma(_archivoXml, _rutaCertificado, _claveCertificado) {
-    // TODO: implementar firma XML-DSig con el certificado digital.
-    throw new Error('Pendiente: FirmaDigital.reciboDatosFirma');
+  async reciboDatosFirma(archivoXml, rutaCertificado, claveCertificado) {
+    this.owner.logger.info(`Proceso de Firma del Documento: ${archivoXml}`);
+
+    const xmlString = await fs.readFile(archivoXml, 'utf8');
+    const signedXml = await this.firmarXml(xmlString, rutaCertificado, claveCertificado);
+    await fs.writeFile(archivoXml, signedXml, 'utf8');
+
+    this.owner.logger.info('Factura Firmada Correctamente');
+    return 'Proceso Realizado';
+  }
+
+  /**
+   * Firma un XML usando XML-DSig (RSA-SHA256, C14N, enveloped-signature).
+   *
+   * @param {string} xmlString - Contenido XML a firmar.
+   * @param {string} rutaCertificado - Ruta del certificado P12/PFX.
+   * @param {string} claveCertificado - Contraseña del certificado.
+   * @returns {Promise<string>} XML firmado.
+   */
+  async firmarXml(xmlString, rutaCertificado, claveCertificado) {
+    try {
+      await fs.access(rutaCertificado);
+      const certBuffer = await fs.readFile(rutaCertificado);
+      const { privateKeyPem, certificatePem } = this.extraerCertificadoYClave(certBuffer, claveCertificado);
+
+      const sig = new SignedXml({
+        privateKey: privateKeyPem,
+        publicCert: certificatePem,
+        signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+        canonicalizationAlgorithm: 'http://www.w3.org/TR/2001/REC-xml-c14n-20010315',
+        getKeyInfoContent: SignedXml.getKeyInfoContent,
+      });
+
+      sig.addReference({
+        xpath: '/*',
+        transforms: ['http://www.w3.org/2000/09/xmldsig#enveloped-signature'],
+        digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+        uri: '',
+        isEmptyUri: true,
+      });
+
+      sig.computeSignature(xmlString, {
+        location: { reference: '/*', action: 'append' },
+      });
+
+      return sig.getSignedXml();
+    } catch (error) {
+      throw new Error(`Error al firmar el XML: ${error.message}`);
+    }
+  }
+
+  /**
+   * Extrae la clave privada (PKCS#8) y el certificado X.509 de un archivo P12/PFX.
+   *
+   * @param {Buffer} certBuffer - Contenido del archivo P12/PFX.
+   * @param {string} claveCertificado - Contraseña del contenedor.
+   * @returns {{privateKeyPem: string, certificatePem: string}}
+   */
+  extraerCertificadoYClave(certBuffer, claveCertificado) {
+    const p12Der = certBuffer.toString('binary');
+    const p12Asn1 = forge.asn1.fromDer(p12Der);
+
+    let p12;
+    try {
+      p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, claveCertificado);
+    } catch {
+      p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, true, claveCertificado);
+    }
+
+    const keyBags = [].concat(
+      p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] || [],
+      p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] || [],
+    );
+    const certBags = p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag];
+
+    if (!keyBags.length || !certBags || !certBags.length) {
+      throw new Error('No se pudo extraer la clave privada o el certificado del archivo P12/PFX');
+    }
+
+    const privateKey = keyBags[0].key;
+    const certificate = certBags[0].cert;
+
+    const rsaPrivateKey = forge.pki.privateKeyToAsn1(privateKey);
+    const privateKeyInfo = forge.pki.wrapRsaPrivateKey(rsaPrivateKey);
+    const privateKeyPem = forge.pki.privateKeyInfoToPem(privateKeyInfo);
+    const certificatePem = forge.pki.certificateToPem(certificate);
+
+    return { privateKeyPem, certificatePem };
   }
 }
 
