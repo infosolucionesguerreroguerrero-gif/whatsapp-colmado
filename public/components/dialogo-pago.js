@@ -3,14 +3,18 @@
 /**
  * Diálogo de pago moderno (Web Component).
  *
- * Carga formas de pago y monedas desde el API, permite registrar pagos
- * múltiples, divisas con tasa/prima, calcula el cambio y dispara la
- * facturación electrónica.
+ * Replica el layout de UDlgFormapagoTactil.pas: botones de formas de pago,
+ * CARGO TC, divisas con tasa/prima, nota de crédito, total pagado y
+ * facturación electrónica. Todo se carga dinámicamente del API.
  *
  * Uso:
  *   <dialogo-pago pedido-id="1001" api-base="/api"></dialogo-pago>
  */
 class DialogoPago extends HTMLElement {
+  static get observedAttributes() {
+    return ['pedido-id', 'api-base'];
+  }
+
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
@@ -21,11 +25,7 @@ class DialogoPago extends HTMLElement {
     this.pedido = null;
     this.lineas = [];
     this.currency = 'RD$';
-    this.render();
-  }
-
-  static get observedAttributes() {
-    return ['pedido-id', 'api-base'];
+    this._renderEsqueleto();
   }
 
   attributeChangedCallback(name, _oldValue, newValue) {
@@ -42,29 +42,30 @@ class DialogoPago extends HTMLElement {
 
   async inicializar() {
     if (!this.pedidoId) return;
+    this._mostrarCargando();
     try {
       const [formas, monedas, pedido] = await Promise.all([
-        this.fetchJSON(`${this.apiBase}/pagos/formas`),
-        this.fetchJSON(`${this.apiBase}/pagos/monedas`),
-        this.fetchJSON(`${this.apiBase}/pedido/${this.pedidoId}`),
+        this._fetchJSON(`${this.apiBase}/pagos/formas`),
+        this._fetchJSON(`${this.apiBase}/pagos/monedas`),
+        this._fetchJSON(`${this.apiBase}/pedido/${this.pedidoId}`),
       ]);
-      this.formas = formas.data || [];
-      this.monedas = monedas.data || [];
+      this.formas = (formas.data || []).filter((f) => f.activo).sort((a, b) => a.orden - b.orden);
+      this.monedas = (monedas.data || []).filter((m) => m.activo).sort((a, b) => a.orden - b.orden);
       this.pedido = pedido.data || null;
-      this.currency = this.pedido ? `RD$` : 'RD$'; // Moneda base del negocio
-      this.renderContenido();
+      this._renderContenido();
+      this._calcular(true);
     } catch (err) {
-      this.mostrarError('No se pudo cargar el diálogo de pago: ' + err.message);
+      this._msg('No se pudo cargar el diálogo de pago: ' + err.message, true);
     }
   }
 
-  async fetchJSON(url) {
+  async _fetchJSON(url) {
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
     return resp.json();
   }
 
-  async postJSON(url, body) {
+  async _postJSON(url, body) {
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -75,233 +76,347 @@ class DialogoPago extends HTMLElement {
     return data;
   }
 
-  render() {
+  _renderEsqueleto() {
     this.shadowRoot.innerHTML = `
       <style>
         :host { display: block; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-        .dialogo { max-width: 720px; margin: 0 auto; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); background: #fff; }
-        h2 { margin: 0 0 1rem; font-size: 1.4rem; }
-        .totales { display: flex; justify-content: space-between; align-items: center; background: #f6f7f8; padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
-        .total { font-size: 1.6rem; font-weight: 700; color: #1a1a1a; }
-        .label { color: #666; font-size: 0.9rem; }
-        .linea { display: grid; grid-template-columns: 1fr 120px 120px 120px 40px; gap: 0.5rem; align-items: end; margin-bottom: 0.75rem; }
-        .linea input, .linea select { padding: 0.55rem; border: 1px solid #d1d5db; border-radius: 6px; width: 100%; box-sizing: border-box; }
-        .linea .btn-quitar { background: #fee2e2; color: #991b1b; border: none; border-radius: 6px; cursor: pointer; padding: 0.55rem; }
-        .linea .btn-quitar:hover { background: #fecaca; }
-        .referencia { grid-column: 1 / -1; }
-        .referencia input { width: 100%; }
-        .acciones { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
-        button { padding: 0.65rem 1.1rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
-        .btn-agregar { background: #e5e7eb; color: #374151; }
-        .btn-calcular { background: #3b82f6; color: #fff; }
-        .btn-procesar { background: #10b981; color: #fff; }
-        .btn-procesar:disabled { background: #9ca3af; cursor: not-allowed; }
-        .resultado { margin-top: 1rem; padding: 1rem; border-radius: 8px; background: #f0fdf4; color: #14532d; }
-        .resultado.error { background: #fef2f2; color: #7f1d1d; }
-        .resultado pre { white-space: pre-wrap; word-break: break-word; }
-        .opciones-fe { margin-top: 1rem; padding: 0.75rem; background: #f9fafb; border-radius: 6px; }
-        .opciones-fe label { display: block; margin-bottom: 0.5rem; }
-        .opciones-fe input[type="text"] { width: 100%; padding: 0.45rem; border: 1px solid #d1d5db; border-radius: 4px; }
-        .resumen { margin-top: 1rem; font-size: 0.95rem; }
-        .resumen table { width: 100%; border-collapse: collapse; }
-        .resumen th, .resumen td { text-align: left; padding: 0.4rem; border-bottom: 1px solid #e5e7eb; }
-        @media (max-width: 640px) {
-          .linea { grid-template-columns: 1fr 1fr 40px; }
-          .linea .referencia { grid-column: 1 / -1; }
-        }
+        .dialogo { max-width: 960px; margin: 0 auto; padding: 1rem; background: #fff; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); }
+        .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem; }
+        h2 { margin: 0; font-size: 1.3rem; }
+        .totales { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+        .totales .label { color: #666; font-size: 0.85rem; display: block; }
+        .totales .value { font-size: 1.3rem; font-weight: 700; }
+        .totales .pagar .value { color: #111; }
+        .totales .pagado .value { color: #2563eb; }
+        .totales .cambio .value { color: #16a34a; }
+        .totales .faltante .value { color: #dc2626; }
+        .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; align-items: center; }
+        .toolbar button { padding: 0.6rem 0.9rem; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; cursor: pointer; font-weight: 600; }
+        .toolbar button:hover { background: #e2e8f0; }
+        .toolbar .accion { margin-left: auto; }
+        .toolbar .aceptar { background: #10b981; color: #fff; border-color: #10b981; }
+        .toolbar .aceptar:hover { background: #059669; }
+        .toolbar .salir { background: #ef4444; color: #fff; border-color: #ef4444; }
+        .toolbar .salir:hover { background: #dc2626; }
+        .cuerpo { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 1rem; }
+        @media (max-width: 720px) { .cuerpo { grid-template-columns: 1fr; } }
+        .panel { border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem; background: #f8fafc; }
+        .campo { margin-bottom: 0.6rem; }
+        .campo label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem; color: #334155; }
+        .campo input, .campo select { width: 100%; padding: 0.45rem; border: 1px solid #cbd5e1; border-radius: 5px; box-sizing: border-box; }
+        .campo-inline { display: flex; align-items: center; gap: 0.5rem; }
+        .campo-inline input { flex: 1; }
+        .msg { min-height: 1.5rem; padding: 0.4rem; border-radius: 5px; font-size: 0.9rem; }
+        .msg.error { background: #fee2e2; color: #7f1d1d; }
+        .msg.ok { background: #dcfce7; color: #14532d; }
+        table.lineas { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        table.lineas th, table.lineas td { text-align: left; padding: 0.4rem; border-bottom: 1px solid #e2e8f0; }
+        table.lineas input { width: 100%; padding: 0.35rem; border: 1px solid #cbd5e1; border-radius: 4px; }
+        table.lineas button { background: #fee2e2; color: #991b1b; border: none; border-radius: 4px; cursor: pointer; padding: 0.25rem 0.5rem; }
+        .monedas .moneda-row { display: grid; grid-template-columns: 1fr 120px 80px; gap: 0.5rem; align-items: center; margin-bottom: 0.4rem; }
+        .monedas label { font-size: 0.85rem; }
+        .monedas .converted { font-size: 0.85rem; color: #475569; text-align: right; }
+        .total-final { margin-top: 0.75rem; padding: 0.75rem; background: #2563eb; color: #fff; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .total-final .value { font-size: 1.5rem; font-weight: 700; }
+        .opciones-fe { margin-top: 0.75rem; padding: 0.6rem; background: #f1f5f9; border-radius: 6px; }
+        .opciones-fe label { display: block; margin-bottom: 0.4rem; font-size: 0.9rem; }
+        .hidden { display: none; }
       </style>
       <div class="dialogo">
-        <h2>Diálogo de Pago</h2>
-        <div id="contenido">
-          <p>Cargando...</p>
-        </div>
+        <div id="contenido"><p>Cargando...</p></div>
       </div>
     `;
   }
 
-  renderContenido() {
-    if (!this.pedido) {
-      this.shadowRoot.getElementById('contenido').innerHTML = '<p>Indica un <code>pedido-id</code> válido.</p>';
-      return;
-    }
-    const totalFmt = this.format(this.pedido.total);
+  _renderContenido() {
+    const formasBtns = this.formas
+      .filter((f) => !f.esPagoMultiple)
+      .map((f) => `<button class="forma" data-codigo="${f.codigo}">${f.nombre}</button>`)
+      .join('');
+
+    const monedaRows = this.monedas
+      .map((m) => `
+        <div class="moneda-row" data-codigo="${m.codigo}">
+          <label>${m.nombre} (${m.simbolo || m.codigo})</label>
+          <input type="number" step="0.01" min="0" placeholder="0.00" class="monto-moneda">
+          <span class="converted">-</span>
+        </div>
+      `)
+      .join('');
 
     this.shadowRoot.getElementById('contenido').innerHTML = `
-      <div class="totales">
-        <div>
-          <div class="label">Total a pagar</div>
-          <div class="total" id="total-pagar">${totalFmt}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="label">Pedido #${this.pedidoId}</div>
-          <div id="cambio-resumen" class="label">Cambio: --</div>
+      <div class="header">
+        <h2>Formas de Pago</h2>
+        <div class="totales">
+          <div class="pagar"><span class="label">Total a pagar</span><span class="value" id="total-pagar">-</span></div>
+          <div class="pagado"><span class="label">Total pagado</span><span class="value" id="total-pagado">-</span></div>
+          <div class="cambio" id="cambio-wrap"><span class="label">Cambio</span><span class="value" id="cambio">-</span></div>
         </div>
       </div>
-
-      <div id="lineas"></div>
-
-      <div class="acciones">
-        <button class="btn-agregar" id="btn-agregar">+ Agregar pago</button>
-        <button class="btn-calcular" id="btn-calcular">Calcular</button>
-        <button class="btn-procesar" id="btn-procesar" disabled>Procesar pago</button>
+      <div class="toolbar">
+        ${formasBtns}
+        <button class="accion aceptar" id="btn-aceptar">Aceptar</button>
+        <button class="salir" id="btn-salir">Salir</button>
       </div>
-
-      <div class="opciones-fe">
-        <label>
-          <input type="checkbox" id="generar-fe"> Generar factura electrónica (e-CF)
-        </label>
-        <label>
-          RNC/Cédula comprador (opcional)
-          <input type="text" id="rnc-comprador" maxlength="11" placeholder="00000000000">
-        </label>
+      <div class="cuerpo">
+        <div class="panel">
+          <div class="campo campo-inline">
+            <label for="cargoTC">CARGO TC $</label>
+            <input id="cargoTC" type="number" step="0.01" min="0" value="0" placeholder="0.00">
+          </div>
+          <div id="msg" class="msg"></div>
+          <table class="lineas">
+            <thead><tr><th>Forma</th><th>Monto</th><th>Moneda</th><th>Monto moneda</th><th>Tasa</th><th>Prima</th><th>Referencia</th><th></th></tr></thead>
+            <tbody id="tbody-lineas"></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="campo"><label>Divisas</label></div>
+          <div class="monedas">${monedaRows}</div>
+          <div class="campo" style="margin-top:0.75rem">
+            <label>Nota de Crédito Número</label>
+            <div class="campo-inline">
+              <input id="nota-credito" type="text" maxlength="30" placeholder="Número">
+              <button id="btn-buscar-nota">Buscar</button>
+            </div>
+          </div>
+          <div class="opciones-fe">
+            <label><input type="checkbox" id="generar-fe"> Generar e-CF</label>
+            <label>RNC/Cédula comprador <input type="text" id="rnc-comprador" maxlength="11" placeholder="00000000000"></label>
+          </div>
+        </div>
       </div>
-
-      <div id="resultado" class="resultado" style="display:none"></div>
+      <div class="total-final">
+        <span>Total Pagado $</span>
+        <span class="value" id="total-pagado-final">0.00</span>
+      </div>
     `;
 
-    this.shadowRoot.getElementById('btn-agregar').addEventListener('click', () => this.agregarLinea());
-    this.shadowRoot.getElementById('btn-calcular').addEventListener('click', () => this.calcular());
-    this.shadowRoot.getElementById('btn-procesar').addEventListener('click', () => this.procesar());
+    this.shadowRoot.querySelectorAll('.toolbar .forma').forEach((b) => {
+      b.addEventListener('click', () => this._agregarLinea(b.dataset.codigo));
+    });
+    this.shadowRoot.getElementById('btn-aceptar').addEventListener('click', () => this._procesar());
+    this.shadowRoot.getElementById('btn-salir').addEventListener('click', () => this._salir());
+    this.shadowRoot.getElementById('cargoTC').addEventListener('input', () => this._calcular(true));
+    this.shadowRoot.getElementById('btn-buscar-nota').addEventListener('click', () => this._buscarNotaCredito());
+    this.shadowRoot.querySelectorAll('.monedas .monto-moneda').forEach((input) => {
+      input.addEventListener('input', () => this._sincronizarDivisas());
+    });
 
-    this.shadowRoot.getElementById('lineas').addEventListener('change', (e) => this.toggleReferencia(e));
-    this.agregarLinea();
+    this._renderLineas();
   }
 
-  agregarLinea() {
-    const lineas = this.shadowRoot.getElementById('lineas');
-    const idx = lineas.children.length;
-    const div = document.createElement('div');
-    div.className = 'linea';
-    div.dataset.index = idx;
-    const formasOpts = this.formas.map((f) => `<option value="${f.codigo}">${f.nombre}</option>`).join('');
-    const monedaOpts = ['<option value="">RD$</option>'].concat(this.monedas.map((m) => `<option value="${m.codigo}">${m.codigo}</option>`)).join('');
-    const monedaDisplay = this.monedas.length ? '' : 'style="display:none"';
-    div.innerHTML = `
-      <select class="metodo" required>${formasOpts}</select>
-      <input class="monto" type="number" step="0.01" min="0.01" placeholder="Monto" required>
-      <select class="moneda" ${monedaDisplay}>${monedaOpts}</select>
-      <input class="monto-moneda" type="number" step="0.01" min="0.01" placeholder="Monto moneda" title="Monto en la moneda seleccionada" style="display:none">
-      <button class="btn-quitar" title="Quitar" ${idx === 0 ? 'style="visibility:hidden"' : ''}>×</button>
-      <div class="referencia" style="display:none"><input type="text" maxlength="120" placeholder="Referencia"></div>
-    `;
-    lineas.appendChild(div);
-    if (lineas.children.length > 1) {
-      div.querySelector('.btn-quitar').addEventListener('click', () => div.remove());
-    }
+  _mostrarCargando() {
+    this.shadowRoot.getElementById('contenido').innerHTML = '<p>Cargando...</p>';
   }
 
-  toggleReferencia(e) {
-    const target = e.target;
-    if (!target.classList.contains('metodo') && !target.classList.contains('moneda')) return;
-    const linea = target.closest('.linea');
-    if (target.classList.contains('metodo')) {
-      const forma = this.formas.find((f) => f.codigo === target.value);
-      const ref = linea.querySelector('.referencia');
-      ref.style.display = forma && forma.requiereReferencia ? 'block' : 'none';
-      ref.querySelector('input').required = Boolean(forma && forma.requiereReferencia);
-    }
-    if (target.classList.contains('moneda')) {
-      const mm = linea.querySelector('.monto-moneda');
-      mm.style.display = target.value ? 'block' : 'none';
-      mm.required = Boolean(target.value);
-    }
+  _agregarLinea(codigoForma) {
+    const forma = this.formas.find((f) => f.codigo === codigoForma);
+    if (!forma) return;
+    this.lineas.push({ metodo: forma.codigo, monto: '', moneda: '', montoMoneda: '', referencia: '' });
+    this._renderLineas();
+    this._calcular(true);
   }
 
-  leerLineas() {
-    const lineas = [];
-    for (const div of this.shadowRoot.getElementById('lineas').children) {
-      const metodo = div.querySelector('.metodo').value;
-      const moneda = div.querySelector('.moneda').value || null;
-      const montoMoneda = div.querySelector('.monto-moneda').value || null;
-      const monto = div.querySelector('.monto').value;
-      const referencia = div.querySelector('.referencia input').value || null;
-      const obj = { metodo, monto: Number(monto) };
-      if (moneda) {
-        obj.moneda = moneda;
-        obj.montoMoneda = montoMoneda ? Number(montoMoneda) : Number(monto);
+  _eliminarLinea(index) {
+    this.lineas.splice(index, 1);
+    this._renderLineas();
+    this._calcular(true);
+  }
+
+  _renderLineas() {
+    const tbody = this.shadowRoot.getElementById('tbody-lineas');
+    if (!tbody) return;
+    const formasMap = new Map(this.formas.map((f) => [f.codigo, f]));
+    const monedasMap = new Map(this.monedas.map((m) => [m.codigo, m]));
+    const monedaOpts = ['<option value="">-</option>']
+      .concat(this.monedas.map((m) => `<option value="${m.codigo}">${m.codigo}</option>`))
+      .join('');
+
+    tbody.innerHTML = this.lineas.map((l, i) => {
+      const forma = formasMap.get(l.metodo);
+      const moneda = l.moneda ? monedasMap.get(l.moneda) : null;
+      const reqRef = forma && forma.requiereReferencia;
+      const refDisplay = reqRef ? 'block' : 'none';
+      return `
+        <tr data-index="${i}">
+          <td>${forma ? forma.nombre : l.metodo}</td>
+          <td><input type="number" step="0.01" min="0" class="monto" value="${l.monto || ''}" ${l.moneda ? 'readonly' : ''}></td>
+          <td><select class="moneda">${monedaOpts.replace(`value="${l.moneda}"`, `value="${l.moneda}" selected`)}</select></td>
+          <td><input type="number" step="0.01" min="0" class="monto-moneda" value="${l.montoMoneda || ''}" ${l.moneda ? '' : 'disabled'}></td>
+          <td>${moneda ? moneda.tasa : '-'}</td>
+          <td>${moneda ? (moneda.prima || 0) + '%' : '-'}</td>
+          <td>
+            <input type="text" class="referencia" value="${l.referencia || ''}" placeholder="${reqRef ? 'Requerido' : 'Opcional'}" style="display:${refDisplay}">
+          </td>
+          <td><button class="eliminar">×</button></td>
+        </tr>
+      `;
+    }).join('');
+
+    tbody.querySelectorAll('input, select').forEach((el) => {
+      el.addEventListener('input', () => this._leerLineasDeTabla());
+    });
+    tbody.querySelectorAll('button.eliminar').forEach((b) => {
+      b.addEventListener('click', (e) => this._eliminarLinea(Number(e.target.closest('tr').dataset.index)));
+    });
+  }
+
+  _leerLineasDeTabla() {
+    const tbody = this.shadowRoot.getElementById('tbody-lineas');
+    const filas = tbody.querySelectorAll('tr');
+    filas.forEach((tr, i) => {
+      const l = this.lineas[i];
+      if (!l) return;
+      l.monto = tr.querySelector('.monto').value;
+      l.moneda = tr.querySelector('.moneda').value;
+      l.montoMoneda = tr.querySelector('.monto-moneda').value;
+      l.referencia = tr.querySelector('.referencia').value;
+    });
+    this._calcular(true);
+  }
+
+  _sincronizarDivisas() {
+    const map = new Map(this.monedas.map((m) => [m.codigo, m]));
+    this.shadowRoot.querySelectorAll('.monedas .moneda-row').forEach((row) => {
+      const codigo = row.dataset.codigo;
+      const monto = row.querySelector('.monto-moneda').value;
+      const span = row.querySelector('.converted');
+      const moneda = map.get(codigo);
+      if (!monto || !moneda || !moneda.tasa) {
+        span.textContent = '-';
+        return;
       }
-      if (referencia) obj.referencia = referencia;
-      lineas.push(obj);
-    }
-    return lineas;
+      const prima = Number(moneda.prima || 0);
+      const tasa = Number(moneda.tasa);
+      const base = Number(monto) * tasa * (1 + prima / 100);
+      span.textContent = this._fmt(base);
+    });
+
+    // Convierte divisas a líneas de pago (método Efectivo / 1)
+    const efectivo = this.formas.find((f) => f.codigo === '1') || this.formas[0];
+    const baseCodigo = efectivo ? efectivo.codigo : '1';
+
+    // Quita líneas de pago que correspondan a divisas para recrearlas
+    this.lineas = this.lineas.filter((l) => !l.moneda);
+
+    this.shadowRoot.querySelectorAll('.monedas .moneda-row').forEach((row) => {
+      const codigo = row.dataset.codigo;
+      const monto = row.querySelector('.monto-moneda').value;
+      if (!monto) return;
+      this.lineas.push({
+        metodo: baseCodigo,
+        monto: '',
+        moneda: codigo,
+        montoMoneda: monto,
+        referencia: '',
+      });
+    });
+
+    this._renderLineas();
+    this._calcular(true);
   }
 
-  async calcular() {
+  _buscarNotaCredito() {
+    const numero = this.shadowRoot.getElementById('nota-credito').value.trim();
+    if (!numero) return this._msg('Indique el número de nota de crédito', true);
+    const nota = this.formas.find((f) => f.codigo === '8');
+    const codigo = nota ? nota.codigo : '8';
+    // Busca o crea línea de nota de crédito con la referencia
+    const idx = this.lineas.findIndex((l) => l.metodo === codigo && l.referencia === numero);
+    if (idx === -1) {
+      this.lineas.push({ metodo: codigo, monto: '', moneda: '', montoMoneda: '', referencia: numero });
+    }
+    this._renderLineas();
+    this._msg(`Nota de crédito ${numero} seleccionada. Indique el monto.`, false);
+  }
+
+  _leerPayload() {
+    const cargoTCInput = this.shadowRoot.getElementById('cargoTC');
+    const cargoTC = cargoTCInput ? Number(cargoTCInput.value || 0) : 0;
+    const lineas = this.lineas
+      .filter((l) => Number(l.monto || l.montoMoneda) > 0)
+      .map((l) => {
+        const obj = { metodo: l.metodo, monto: Number(l.monto || l.montoMoneda || 0) };
+        if (l.moneda) {
+          obj.moneda = l.moneda;
+          obj.montoMoneda = Number(l.montoMoneda || l.monto || 0);
+        }
+        if (l.referencia) obj.referencia = l.referencia;
+        return obj;
+      });
+    return { lineas, cargoTC };
+  }
+
+  async _calcular(silencioso = false) {
     try {
-      const lineas = this.leerLineas();
-      const data = await this.postJSON(`${this.apiBase}/pagos/${this.pedidoId}/calcular`, { lineas });
-      this.mostrarResumen(data.data);
-      this.shadowRoot.getElementById('btn-procesar').disabled = !data.data.completado;
+      const payload = this._leerPayload();
+      if (payload.lineas.length === 0) {
+        this._actualizarTotales({ totalConCargo: this.pedido ? this.pedido.totalConCargo || this.pedido.total : 0, totalPagado: 0, cambio: 0, faltante: this.pedido ? this.pedido.total : 0 });
+        return;
+      }
+      const data = await this._postJSON(`${this.apiBase}/pagos/${this.pedidoId}/calcular`, payload);
+      this._actualizarTotales(data.data);
+      if (!silencioso) this._msg('Cálculo actualizado', false);
       return data.data;
     } catch (err) {
-      this.mostrarError(err.message);
+      if (!silencioso) this._msg(err.message, true);
       return null;
     }
   }
 
-  async procesar() {
+  async _procesar() {
     try {
-      const lineas = this.leerLineas();
+      const payload = this._leerPayload();
+      if (payload.lineas.length === 0) throw new Error('Indique al menos un pago');
       const generarFe = this.shadowRoot.getElementById('generar-fe').checked;
       const rncComprador = this.shadowRoot.getElementById('rnc-comprador').value.trim() || null;
-      const data = await this.postJSON(`${this.apiBase}/pagos/${this.pedidoId}/procesar`, {
-        lineas,
-        generarFe,
-        rncComprador,
-      });
-      this.mostrarResultado(data.data);
-      this.shadowRoot.getElementById('btn-procesar').disabled = true;
+      const data = await this._postJSON(`${this.apiBase}/pagos/${this.pedidoId}/procesar`, { ...payload, generarFe, rncComprador });
+      this._actualizarTotales(data.data);
+      const fe = data.data.facturacionElectronica || { completado: false, razon: 'No solicitada' };
+      this._msg(`Pedido procesado. Cambio: ${this._fmt(data.data.cambio || 0)}. e-CF: ${fe.completado ? 'Generada' : fe.razon || 'No generada'}`, false);
+      this.dispatchEvent(new CustomEvent('pago-procesado', { detail: data.data, bubbles: true, composed: true }));
     } catch (err) {
-      this.mostrarError(err.message);
+      this._msg(err.message, true);
     }
   }
 
-  mostrarResumen(resumen) {
-    const cambio = resumen.cambio > 0 ? this.format(resumen.cambio) : '0.00';
-    const faltante = resumen.faltante > 0 ? this.format(resumen.faltante) : '0.00';
-    const estado = resumen.completado ? 'Pago completo' : 'Faltante';
-    this.shadowRoot.getElementById('cambio-resumen').innerHTML = `${estado}: ${resumen.completado ? 'Cambio ' + cambio : faltante}`;
+  _salir() {
+    this.dispatchEvent(new CustomEvent('pago-cerrar', { bubbles: true, composed: true }));
+  }
 
-    let html = '<div class="resumen"><table><thead><tr><th>Método</th><th>Base</th><th>Moneda</th><th>Tasa</th><th>Prima</th></tr></thead><tbody>';
-    for (const l of resumen.lineas) {
-      html += `<tr>
-        <td>${l.metodo}</td>
-        <td>${this.format(l.montoBase)}</td>
-        <td>${l.moneda ? `${l.montoMoneda} ${l.moneda}` : '—'}</td>
-        <td>${l.tasa || '—'}</td>
-        <td>${l.prima ? l.prima + '%' : '—'}</td>
-      </tr>`;
+  _actualizarTotales(resumen) {
+    const totalPagar = Number(resumen.totalConCargo || resumen.total || 0);
+    const totalPagado = Number(resumen.totalPagado || 0);
+    const cambio = Number(resumen.cambio || 0);
+    const faltante = Number(resumen.faltante || 0);
+
+    this.shadowRoot.getElementById('total-pagar').textContent = this._fmt(totalPagar);
+    this.shadowRoot.getElementById('total-pagado').textContent = this._fmt(totalPagado);
+    const cambioWrap = this.shadowRoot.getElementById('cambio-wrap');
+    const cambioEl = this.shadowRoot.getElementById('cambio');
+    if (faltante > 0) {
+      cambioWrap.className = 'faltante';
+      cambioEl.textContent = this._fmt(faltante);
+      cambioWrap.querySelector('.label').textContent = 'Faltante';
+    } else {
+      cambioWrap.className = 'cambio';
+      cambioEl.textContent = this._fmt(cambio);
+      const label = cambioWrap.querySelector('.label');
+      if (label) label.textContent = 'Cambio';
     }
-    html += `</tbody></table><p><strong>Total pagado:</strong> ${this.format(resumen.totalPagado)} | <strong>Cambio:</strong> ${cambio}</p></div>`;
-    const result = this.shadowRoot.getElementById('resultado');
-    result.className = resumen.completado ? 'resultado' : 'resultado error';
-    result.style.display = 'block';
-    result.innerHTML = html;
+    this.shadowRoot.getElementById('total-pagado-final').textContent = this._fmt(totalPagado);
   }
 
-  mostrarResultado(data) {
-    const cambio = this.format(data.cambio || 0);
-    const fe = data.facturacionElectronica || { completado: false, razon: 'No solicitada' };
-    const result = this.shadowRoot.getElementById('resultado');
-    result.className = 'resultado';
-    result.style.display = 'block';
-    result.innerHTML = `
-      <p><strong>Pedido #${data.pedido.id} procesado.</strong></p>
-      <p>Cambio: ${cambio}</p>
-      <p>Facturación electrónica: ${fe.completado ? 'Generada' : fe.razon || 'No generada'}</p>
-      <pre>${JSON.stringify(data, null, 2).slice(0, 1200)}</pre>
-    `;
+  _msg(text, esError) {
+    const el = this.shadowRoot.getElementById('msg');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'msg ' + (esError ? 'error' : 'ok');
   }
 
-  mostrarError(msg) {
-    const result = this.shadowRoot.getElementById('resultado');
-    result.className = 'resultado error';
-    result.style.display = 'block';
-    result.innerHTML = `<p><strong>Error:</strong> ${msg}</p>`;
-  }
-
-  format(amount) {
-    return 'RD$' + Number(amount || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  _fmt(amount) {
+    return this.currency + Number(amount || 0).toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 }
 

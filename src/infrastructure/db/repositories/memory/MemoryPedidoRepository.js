@@ -38,6 +38,7 @@ class MemoryPedidoRepository extends IPedidoRepository {
       notas,
       tiempoEstimadoMin: 20,
       cliente,
+      cargoTC: 0,
       creado: new Date().toISOString(),
     };
     this._pedidos.set(pedidoId, data);
@@ -63,6 +64,13 @@ class MemoryPedidoRepository extends IPedidoRepository {
     const d = this._pedidos.get(Number(pedidoId));
     if (!d) return null;
     d.formaPago = formaPago;
+    return this.getById(pedidoId);
+  }
+
+  async actualizarCargoTC(pedidoId, cargoTC) {
+    const d = this._pedidos.get(Number(pedidoId));
+    if (!d) return null;
+    d.cargoTC = Number(cargoTC || 0);
     return this.getById(pedidoId);
   }
 

@@ -52,36 +52,24 @@ const mensajeBot = Joi.object({
   type: Joi.string().valid('text', 'audio', 'image').default('text'),
 });
 
+const lineaPago = Joi.object({
+  metodo: Joi.string().max(30).required(),
+  monto: Joi.number().positive().required(),
+  montoMoneda: Joi.number().positive().allow(null),
+  moneda: Joi.string().max(10).allow(null, ''),
+  referencia: Joi.string().max(120).allow(null, ''),
+});
+
 const calcularPago = Joi.object({
-  lineas: Joi.array()
-    .items(
-      Joi.object({
-        metodo: Joi.string().max(30).required(),
-        monto: Joi.number().positive().required(),
-        montoMoneda: Joi.number().positive().allow(null),
-        moneda: Joi.string().max(10).allow(null, ''),
-        referencia: Joi.string().max(120).allow(null, ''),
-      })
-    )
-    .min(1)
-    .required(),
+  lineas: Joi.array().items(lineaPago).min(1).required(),
+  cargoTC: Joi.number().min(0).allow(null),
 });
 
 const procesarPago = Joi.object({
-  lineas: Joi.array()
-    .items(
-      Joi.object({
-        metodo: Joi.string().max(30).required(),
-        monto: Joi.number().positive().required(),
-        montoMoneda: Joi.number().positive().allow(null),
-        moneda: Joi.string().max(10).allow(null, ''),
-        referencia: Joi.string().max(120).allow(null, ''),
-      })
-    )
-    .min(1)
-    .required(),
+  lineas: Joi.array().items(lineaPago).min(1).required(),
   rncComprador: Joi.string().max(20).allow(null, ''),
   generarFe: Joi.boolean().default(false),
+  cargoTC: Joi.number().min(0).allow(null),
 });
 
 module.exports = { login, crearCliente, crearPedido, actualizarEstado, imprimir, mensajeBot, calcularPago, procesarPago };

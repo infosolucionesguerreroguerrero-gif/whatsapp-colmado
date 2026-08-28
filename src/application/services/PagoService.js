@@ -33,19 +33,19 @@ class PagoService {
     return this.pagos.listarMonedas();
   }
 
-  async calcular(pedidoId, lineas = []) {
+  async calcular(pedidoId, { lineas = [], cargoTC = null }) {
     const pedido = await this.pedidos.getById(pedidoId);
     if (!pedido) throw new NotFoundError('Pedido no encontrado');
     const [formas, monedas] = await Promise.all([this.obtenerFormasPago(), this.obtenerMonedas()]);
-    return this._calcularResumen(pedido, lineas, formas, monedas);
+    return this._calcularResumen(pedido, lineas, formas, monedas, cargoTC);
   }
 
-  async procesar(pedidoId, { lineas = [], rncComprador = null, generarFe = false }) {
+  async procesar(pedidoId, { lineas = [], rncComprador = null, generarFe = false, cargoTC = null }) {
     const pedido = await this.pedidos.getById(pedidoId);
     if (!pedido) throw new NotFoundError('Pedido no encontrado');
 
     const [formas, monedas] = await Promise.all([this.obtenerFormasPago(), this.obtenerMonedas()]);
-    const resumen = this._calcularResumen(pedido, lineas, formas, monedas);
+    const resumen = this._calcularResumen(pedido, lineas, formas, monedas, cargoTC);
 
     if (!resumen.completado) {
       throw new ValidationError(`Faltan ${this._fmt(resumen.faltante)} para completar el pago`);
@@ -68,6 +68,9 @@ class PagoService {
 
     const principal = this._formaPrincipal(resumen.lineas, formas);
     await this.pedidos.actualizarFormaPago(pedidoId, principal);
+    if (cargoTC != null) {
+      await this.pedidos.actualizarCargoTC(pedidoId, cargoTC);
+    }
     await this.pedidos.cambiarEstado(pedidoId, Pedido.ESTADOS.CONFIRMADO);
 
     let facturacionElectronica = null;
@@ -104,16 +107,18 @@ class PagoService {
     return { completado: false, razon: 'Facturación electrónica no configurada', preFactura };
   }
 
-  _calcularResumen(pedido, lineas, formas, monedas) {
+  _calcularResumen(pedido, lineas, formas, monedas, cargoTC = null) {
     if (!Array.isArray(lineas) || lineas.length === 0) {
       throw new ValidationError('Debe indicar al menos una línea de pago');
     }
 
+    const cargo = cargoTC != null ? Number(cargoTC) : Number(pedido.cargoTC || 0);
     const pagadoPrevio = (pedido.pagos || [])
       .filter((p) => p.estado === 'pagado')
       .reduce((acc, p) => acc + Number(p.monto), 0);
 
-    const totalPendiente = round2(pedido.total - pagadoPrevio);
+    const totalConCargo = round2(pedido.total + cargo);
+    const totalPendiente = round2(totalConCargo - pagadoPrevio);
     let totalPagado = 0;
     const detalle = [];
 
@@ -165,6 +170,8 @@ class PagoService {
 
     return {
       total: pedido.total,
+      cargoTC: cargo,
+      totalConCargo,
       pagadoPrevio,
       totalPendiente,
       totalPagado: round2(totalPagado),
@@ -213,13 +220,13 @@ class PagoService {
       telefonoEmisor: this.business.phone || '',
       direccionEmisor: this.business.address || '',
       fechaEmision: fecha.toISOString(),
-      montoTotal: round2(resumen.totalPagado || pedido.total),
-      montoTotalStr: (resumen.totalPagado || pedido.total).toFixed(2),
-      neto: round2(pedido.total - pedido.itbis),
+      montoTotal: round2(resumen.totalConCargo || pedido.total),
+      montoTotalStr: (resumen.totalConCargo || pedido.total).toFixed(2),
+      neto: round2(resumen.totalConCargo - pedido.itbis),
       itbis: round2(pedido.itbis),
       subtotal: round2(pedido.subtotal),
       envio: round2(pedido.envio),
-      total: round2(pedido.total),
+      total: round2(resumen.totalConCargo || pedido.total),
       pagos: resumen.lineas.map((l) => ({
         metodo: l.metodo,
         monto: l.montoBase,

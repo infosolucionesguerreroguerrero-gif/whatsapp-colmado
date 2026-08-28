@@ -1,5 +1,7 @@
 'use strict';
 
+const { round2 } = require('../value-objects/Money');
+
 /** Estados del pedido (alineados con la tabla EstadosPedidos). */
 const ESTADOS = Object.freeze({
   RECIBIDO: 1,
@@ -39,6 +41,7 @@ class Pedido {
     cliente = null,
     creado = null,
     pagos = [],
+    cargoTC = 0,
   } = {}) {
     this.pedidoId = pedidoId;
     this.clienteId = clienteId;
@@ -55,6 +58,11 @@ class Pedido {
     this.cliente = cliente;
     this.creado = creado;
     this.pagos = pagos;
+    this.cargoTC = Number(cargoTC || 0);
+  }
+
+  get totalConCargo() {
+    return round2(this.total + this.cargoTC);
   }
 
   get estadoNombre() {

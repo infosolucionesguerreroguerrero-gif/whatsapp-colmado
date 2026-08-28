@@ -15,6 +15,7 @@ function mapPedido(resumen, detalle = [], pagos = []) {
     total: resumen.Total,
     formaPago: resumen.FormaPago,
     tiempoEstimadoMin: resumen.TiempoEstimadoMin,
+    cargoTC: resumen.CargoTC,
     creado: resumen.Creado,
     cliente: { nombre: resumen.Cliente, telefono: resumen.Telefono, direccion: resumen.Direccion },
     items: detalle.map((d) => ({
@@ -24,7 +25,19 @@ function mapPedido(resumen, detalle = [], pagos = []) {
       precioUnit: d.PrecioUnit,
       importe: d.Importe,
     })),
-    pagos,
+    pagos: pagos.map((p) => ({
+      pagoId: p.PagoId,
+      pedidoId: p.PedidoId,
+      metodo: p.Metodo,
+      monto: p.Monto,
+      referencia: p.Referencia,
+      estado: p.Estado,
+      moneda: p.Moneda,
+      montoMoneda: p.MontoMoneda,
+      tasa: p.Tasa,
+      prima: p.Prima,
+      creado: p.Creado,
+    })),
   });
 }
 
@@ -87,6 +100,16 @@ class SqlPedidoRepository extends IPedidoRepository {
     return this.getById(pedidoId);
   }
 
+  async actualizarCargoTC(pedidoId, cargoTC) {
+    const pool = await getPool();
+    await pool
+      .request()
+      .input('PedidoId', sql.Int, pedidoId)
+      .input('CargoTC', sql.Decimal(12, 2), cargoTC)
+      .query('UPDATE dbo.Pedidos SET CargoTC = @CargoTC, Actualizado = SYSUTCDATETIME() WHERE PedidoId = @PedidoId;');
+    return this.getById(pedidoId);
+  }
+
   async ultimoDeCliente(clienteId) {
     const pool = await getPool();
     const result = await pool
@@ -113,7 +136,19 @@ class SqlPedidoRepository extends IPedidoRepository {
       .input('Prima', sql.Decimal(5, 2), prima)
       .execute('dbo.sp_Pago_Registrar');
     const r = result.recordset[0];
-    return { pagoId: r.PagoId, pedidoId: r.PedidoId, metodo: r.Metodo, monto: r.Monto, estado: r.Estado };
+    return {
+      pagoId: r.PagoId,
+      pedidoId: r.PedidoId,
+      metodo: r.Metodo,
+      monto: r.Monto,
+      referencia: r.Referencia,
+      estado: r.Estado,
+      moneda: r.Moneda,
+      montoMoneda: r.MontoMoneda,
+      tasa: r.Tasa,
+      prima: r.Prima,
+      creado: r.Creado,
+    };
   }
 
   async list(filtro = {}) {

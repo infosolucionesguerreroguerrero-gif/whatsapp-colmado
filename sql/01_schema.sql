@@ -179,6 +179,7 @@ CREATE TABLE dbo.Pedidos (
     Envio         DECIMAL(12,2)     NOT NULL CONSTRAINT DF_Pedidos_Envio DEFAULT 0,
     Itbis         DECIMAL(12,2)     NOT NULL CONSTRAINT DF_Pedidos_Itbis DEFAULT 0,
     Total         DECIMAL(12,2)     NOT NULL CONSTRAINT DF_Pedidos_Total DEFAULT 0,
+    CargoTC       DECIMAL(12,2)     NOT NULL CONSTRAINT DF_Pedidos_CargoTC DEFAULT 0,
     FormaPago     VARCHAR(30)       NULL,   -- efectivo|transferencia|tarjeta|contraentrega
     Notas         NVARCHAR(400)     NULL,
     TiempoEstimadoMin INT           NULL,
@@ -337,6 +338,11 @@ CREATE TABLE dbo.Logs (
     Creado        DATETIME2(0)      NOT NULL CONSTRAINT DF_Logs_Creado DEFAULT SYSUTCDATETIME(),
     CONSTRAINT PK_Logs PRIMARY KEY (LogId)
 );
+GO
+
+-- Asegura columna CargoTC en despliegues existentes
+IF COL_LENGTH('dbo.Pedidos', 'CargoTC') IS NULL
+    ALTER TABLE dbo.Pedidos ADD CargoTC DECIMAL(12,2) NOT NULL CONSTRAINT DF_Pedidos_CargoTC2 DEFAULT 0;
 GO
 
 PRINT 'Esquema base creado correctamente.';

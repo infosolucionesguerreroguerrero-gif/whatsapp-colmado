@@ -58,6 +58,8 @@ class PedidoDTO {
       envio: pedido.envio,
       itbis: pedido.itbis,
       total: pedido.total,
+      cargoTC: pedido.cargoTC,
+      totalConCargo: (pedido.totalConCargo ?? pedido.total + pedido.cargoTC),
       formaPago: pedido.formaPago,
       tiempoEstimadoMin: pedido.tiempoEstimadoMin,
       creado: pedido.creado,
