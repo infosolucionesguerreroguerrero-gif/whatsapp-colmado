@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const path = require('path');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -35,6 +36,9 @@ function createApp(container) {
     logger.debug('%s %s', req.method, req.originalUrl);
     next();
   });
+
+  // SPA / componentes del diálogo de pago (comandera / retail)
+  app.use(express.static(path.join(__dirname, '..', '..', '..', 'public')));
 
   app.use('/api', buildRoutes(container));
 

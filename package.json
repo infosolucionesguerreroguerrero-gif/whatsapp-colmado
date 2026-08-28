@@ -39,10 +39,12 @@
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "mssql": "^11.0.1",
+    "node-forge": "^1.4.0",
     "pino": "^9.3.2",
     "pino-pretty": "^11.2.2",
     "uuid": "^10.0.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "xml-crypto": "^6.1.2"
   },
   "optionalDependencies": {
     "@whiskeysockets/baileys": "^6.7.8",

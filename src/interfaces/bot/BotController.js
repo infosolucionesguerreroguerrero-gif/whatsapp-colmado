@@ -12,12 +12,13 @@ const { STATES } = SessionStore;
  * servicios de la capa de aplicación para responder. Es una máquina de estados.
  */
 class BotController {
-  constructor({ nlu, clienteService, catalogoService, carritoService, pedidoService, business, sessionStore }) {
+  constructor({ nlu, clienteService, catalogoService, carritoService, pedidoService, pagoService, business, sessionStore }) {
     this.nlu = nlu;
     this.clientes = clienteService;
     this.catalogo = catalogoService;
     this.carrito = carritoService;
     this.pedidos = pedidoService;
+    this.pagos = pagoService;
     this.business = business;
     this.sessions = sessionStore || new SessionStore();
     this.currency = business.currency;
@@ -49,7 +50,7 @@ class BotController {
       if (session.state === STATES.CONFIRMAR_ITEMS) return this._confirmarItems(from, nlu);
       if (session.state === STATES.CONFIRMAR_REPETIR) return this._confirmarRepetir(from, nlu);
       if (session.state === STATES.ELIMINAR_ITEM) return this._eliminarItem(from, nlu, text);
-      if (session.state === STATES.PAGO) return this._procesarPago(from, nlu);
+      if (session.state === STATES.PAGO) return this._procesarPago(from, nlu, text);
       if (session.state === STATES.EN_CARRITO) return this._enCarrito(from, nlu, text, cliente);
 
       // Estado MENU (por defecto): enrutar por intención
@@ -242,20 +243,34 @@ class BotController {
       return [messages.carritoVacio()];
     }
     const full = await this.clientes.obtener(from);
+    const formas = await this.pagos.obtenerFormasPago();
     this.sessions.set(from, STATES.PAGO);
-    return [messages.confirmacion(carrito, full || cliente, this.currency)];
+    return [messages.confirmacion(carrito, full || cliente, this.currency, formas)];
   }
 
-  async _procesarPago(from, nlu) {
+  async _procesarPago(from, nlu, text) {
     if (nlu.intent === 'cancelar') {
       this.sessions.set(from, STATES.EN_CARRITO);
       return ['Pago cancelado. Tu carrito sigue disponible. Escribe "confirmar" cuando quieras.'];
     }
-    const map = { 1: 'efectivo', 2: 'transferencia', 3: 'tarjeta', 4: 'contraentrega' };
-    const formaPago = map[nlu.opcion];
-    if (!formaPago) return ['Selecciona la forma de pago: 1. Efectivo, 2. Transferencia, 3. Tarjeta, 4. Contra entrega.'];
 
-    const { pedido } = await this.pedidos.confirmarDesdeCarrito(from, { formaPago });
+    const formas = await this.pagos.obtenerFormasPago();
+    const normalizado = String(text || '').trim().toLowerCase();
+
+    // Coincidencia por texto libre (nombre o código)
+    let seleccionada = formas.find((f) => String(f.nombre).toLowerCase() === normalizado || String(f.codigo).toLowerCase() === normalizado);
+
+    // Coincidencia por opción numérica
+    if (!seleccionada && nlu.opcion && nlu.opcion > 0 && nlu.opcion <= formas.length) {
+      seleccionada = formas[nlu.opcion - 1];
+    }
+
+    if (!seleccionada) {
+      const opciones = formas.map((f, i) => `${i + 1}. ${f.nombre}`).join(', ');
+      return [`Selecciona la forma de pago: ${opciones}.`];
+    }
+
+    const { pedido } = await this.pedidos.confirmarDesdeCarrito(from, { formaPago: seleccionada.nombre.toLowerCase() });
     this.sessions.set(from, STATES.MENU);
     return [messages.pedidoCreado(pedido, this.currency)];
   }

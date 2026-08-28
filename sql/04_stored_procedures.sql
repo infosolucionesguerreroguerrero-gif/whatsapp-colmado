@@ -247,16 +247,20 @@ GO
 IF OBJECT_ID('dbo.sp_Pago_Registrar', 'P') IS NOT NULL DROP PROCEDURE dbo.sp_Pago_Registrar;
 GO
 CREATE PROCEDURE dbo.sp_Pago_Registrar
-    @PedidoId   INT,
-    @Metodo     VARCHAR(30),
-    @Monto      DECIMAL(12,2),
-    @Referencia NVARCHAR(120) = NULL,
-    @Estado     VARCHAR(20) = 'pendiente'
+    @PedidoId    INT,
+    @Metodo      VARCHAR(30),
+    @Monto       DECIMAL(12,2),
+    @Referencia  NVARCHAR(120) = NULL,
+    @Estado      VARCHAR(20) = 'pendiente',
+    @Moneda      VARCHAR(10) = NULL,
+    @MontoMoneda DECIMAL(12,2) = NULL,
+    @Tasa        DECIMAL(12,4) = NULL,
+    @Prima       DECIMAL(5,2) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
-    INSERT INTO dbo.Pagos (PedidoId, Metodo, Monto, Referencia, Estado)
-    VALUES (@PedidoId, @Metodo, @Monto, @Referencia, @Estado);
+    INSERT INTO dbo.Pagos (PedidoId, Metodo, Monto, Referencia, Estado, Moneda, MontoMoneda, Tasa, Prima)
+    VALUES (@PedidoId, @Metodo, @Monto, @Referencia, @Estado, @Moneda, @MontoMoneda, @Tasa, @Prima);
     SELECT * FROM dbo.Pagos WHERE PagoId = SCOPE_IDENTITY();
 END
 GO

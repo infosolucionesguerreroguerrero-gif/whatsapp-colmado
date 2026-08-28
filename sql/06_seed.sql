@@ -32,6 +32,35 @@ ON t.Clave = s.Clave
 WHEN NOT MATCHED THEN INSERT (Clave, Valor) VALUES (s.Clave, s.Valor);
 GO
 
+/* ---- Formas de Pago ---- */
+MERGE dbo.FormasPago AS t
+USING (VALUES
+    ('1', N'Efectivo',          1, 0, 0),
+    ('2', N'Transferencia',     2, 1, 0),
+    ('3', N'Tarjeta',           3, 1, 0),
+    ('4', N'Contra entrega',    4, 0, 0),
+    ('5', N'Cheque',            5, 1, 0),
+    ('6', N'Pago múltiple',     6, 0, 1),
+    ('C', N'Crédito',           7, 0, 0),
+    ('8', N'Nota de crédito',  8, 0, 0)
+) AS s (Codigo, Nombre, Orden, RequiereReferencia, EsPagoMultiple)
+ON t.Codigo = s.Codigo
+WHEN NOT MATCHED THEN INSERT (Codigo, Nombre, Orden, RequiereReferencia, EsPagoMultiple)
+VALUES (s.Codigo, s.Nombre, s.Orden, s.RequiereReferencia, s.EsPagoMultiple);
+GO
+
+/* ---- Monedas ---- */
+MERGE dbo.Monedas AS t
+USING (VALUES
+    ('USD', N'Dólar estadounidense', 'US$', 0, 0, 1),
+    ('EUR', N'Euro',                  '€',   0, 0, 2),
+    ('CAD', N'Dólar canadiense',       'C$',  0, 0, 3)
+) AS s (Codigo, Nombre, Simbolo, Tasa, Prima, Orden)
+ON t.Codigo = s.Codigo
+WHEN NOT MATCHED THEN INSERT (Codigo, Nombre, Simbolo, Tasa, Prima, Orden)
+VALUES (s.Codigo, s.Nombre, s.Simbolo, s.Tasa, s.Prima, s.Orden);
+GO
+
 /* ---- Categorías ---- */
 MERGE dbo.Categorias AS t
 USING (VALUES

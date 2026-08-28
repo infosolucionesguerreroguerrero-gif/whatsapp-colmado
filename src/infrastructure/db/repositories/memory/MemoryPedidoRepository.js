@@ -46,26 +46,47 @@ class MemoryPedidoRepository extends IPedidoRepository {
 
   async getById(pedidoId) {
     const d = this._pedidos.get(Number(pedidoId));
-    return d ? new Pedido(_clone(d)) : null;
+    if (!d) return null;
+    const data = _clone(d);
+    data.pagos = _clone(this._pagos.get(Number(pedidoId)) || []);
+    return new Pedido(data);
   }
 
   async cambiarEstado(pedidoId, estadoId) {
     const d = this._pedidos.get(Number(pedidoId));
     if (!d) return null;
     d.estadoId = Number(estadoId);
-    return new Pedido(_clone(d));
+    return this.getById(pedidoId);
+  }
+
+  async actualizarFormaPago(pedidoId, formaPago) {
+    const d = this._pedidos.get(Number(pedidoId));
+    if (!d) return null;
+    d.formaPago = formaPago;
+    return this.getById(pedidoId);
   }
 
   async ultimoDeCliente(clienteId) {
     const lista = [...this._pedidos.values()]
       .filter((p) => p.clienteId === Number(clienteId))
       .sort((a, b) => new Date(b.creado) - new Date(a.creado));
-    return lista[0] ? new Pedido(_clone(lista[0])) : null;
+    return lista[0] ? this.getById(lista[0].pedidoId) : null;
   }
 
-  async registrarPago(pedidoId, { metodo, monto, referencia = null, estado = 'pendiente' }) {
+  async registrarPago(pedidoId, { metodo, monto, referencia = null, estado = 'pendiente', moneda = null, montoMoneda = null, tasa = null, prima = null }) {
     const arr = this._pagos.get(Number(pedidoId)) || [];
-    const pago = { pagoId: arr.length + 1, pedidoId: Number(pedidoId), metodo, monto, referencia, estado };
+    const pago = {
+      pagoId: arr.length + 1,
+      pedidoId: Number(pedidoId),
+      metodo,
+      monto: round2(monto),
+      referencia,
+      estado,
+      moneda,
+      montoMoneda: montoMoneda != null ? round2(montoMoneda) : null,
+      tasa,
+      prima,
+    };
     arr.push(pago);
     this._pagos.set(Number(pedidoId), arr);
     return pago;
@@ -77,7 +98,7 @@ class MemoryPedidoRepository extends IPedidoRepository {
     if (filtro.clienteId) lista = lista.filter((p) => p.clienteId === Number(filtro.clienteId));
     return lista
       .sort((a, b) => new Date(b.creado) - new Date(a.creado))
-      .map((d) => new Pedido(_clone(d)));
+      .map((d) => this.getById(d.pedidoId));
   }
 }
 

@@ -8,6 +8,7 @@ const PedidoController = require('../controllers/PedidoController');
 const ClienteController = require('../controllers/ClienteController');
 const ImpresionController = require('../controllers/ImpresionController');
 const BotHttpController = require('../controllers/BotController');
+const PagoController = require('../controllers/PagoController');
 
 const { requireAuth } = require('../middlewares/auth');
 const { validate } = require('../middlewares/validate');
@@ -27,6 +28,7 @@ function buildRoutes(container) {
   const cliente = new ClienteController({ clienteService: services.clienteService });
   const impresion = new ImpresionController({ pedidoService: services.pedidoService });
   const botHttp = new BotHttpController({ botController, whatsappProvider });
+  const pago = new PagoController({ pagoService: services.pagoService });
 
   // Salud
   router.get('/health', (_req, res) => res.json({ ok: true, status: 'up', ts: new Date().toISOString() }));
@@ -51,6 +53,12 @@ function buildRoutes(container) {
   router.post('/pedido', validate(schemas.crearPedido), pedido.crear);
   router.put('/pedido/:id', requireAuth, validate(schemas.actualizarEstado), pedido.actualizarEstado);
   router.delete('/pedido/:id', requireAuth, pedido.cancelar);
+
+  // Pagos / diálogo de pago
+  router.get('/pagos/formas', pago.formasPago.bind(pago));
+  router.get('/pagos/monedas', pago.monedas.bind(pago));
+  router.post('/pagos/:pedidoId/calcular', validate(schemas.calcularPago), pago.calcular.bind(pago));
+  router.post('/pagos/:pedidoId/procesar', validate(schemas.procesarPago), pago.procesar.bind(pago));
 
   // Impresión
   router.post('/imprimir', requireAuth, validate(schemas.imprimir), impresion.imprimir);

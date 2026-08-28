@@ -38,6 +38,7 @@ class Pedido {
     tiempoEstimadoMin = null,
     cliente = null,
     creado = null,
+    pagos = [],
   } = {}) {
     this.pedidoId = pedidoId;
     this.clienteId = clienteId;
@@ -53,6 +54,7 @@ class Pedido {
     this.tiempoEstimadoMin = tiempoEstimadoMin;
     this.cliente = cliente;
     this.creado = creado;
+    this.pagos = pagos;
   }
 
   get estadoNombre() {

@@ -24,6 +24,10 @@ class IPedidoRepository {
     throw new Error('No implementado: registrarPago');
   }
 
+  async actualizarFormaPago(pedidoId, formaPago) {
+    throw new Error('No implementado: actualizarFormaPago');
+  }
+
   async list(filtro = {}) {
     throw new Error('No implementado: list');
   }

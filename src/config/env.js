@@ -74,8 +74,22 @@ const env = {
     phone: process.env.BUSINESS_PHONE || '809-000-0000',
     address: process.env.BUSINESS_ADDRESS || 'Calle Principal #1',
     currency: process.env.CURRENCY || 'RD$',
+    rnc: process.env.BUSINESS_RNC || '',
     itbisRate: num(process.env.ITBIS_RATE, 0),
     deliveryFee: num(process.env.DEFAULT_DELIVERY_FEE, 100),
+  },
+
+  ecf: {
+    enabled: bool(process.env.ECF_ENABLED, false),
+    apiUrl: process.env.ECF_API_URL || '', // URL del portal-ecf-api (.NET) para firmar/enviar
+    ambienteTrabajo: process.env.ECF_AMBIENTE || 'PruebaComunicacion', // Certificacion | Produccion
+    rutaSistema: process.env.ECF_RUTA_SISTEMA || './ecf',
+    nombreCertificado: process.env.ECF_CERT_NOMBRE || '',
+    rutaCertificado: process.env.ECF_CERT_RUTA || '',
+    claveCertificado: process.env.ECF_CERT_CLAVE || '',
+    enviarXmlAHosting: process.env.ECF_ENVIAR_HOSTING || 'N',
+    envioDirectoADgii: process.env.ECF_ENVIO_DIRECTO || 'N',
+    emitirFacturaElectronica: bool(process.env.ECF_ENABLED, false) ? 'S' : 'N',
   },
 };
 

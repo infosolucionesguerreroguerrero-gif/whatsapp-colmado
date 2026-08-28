@@ -77,6 +77,16 @@ class SqlPedidoRepository extends IPedidoRepository {
     return resumen ? mapPedido(resumen) : null;
   }
 
+  async actualizarFormaPago(pedidoId, formaPago) {
+    const pool = await getPool();
+    await pool
+      .request()
+      .input('PedidoId', sql.Int, pedidoId)
+      .input('FormaPago', sql.VarChar(30), formaPago)
+      .query('UPDATE dbo.Pedidos SET FormaPago = @FormaPago, Actualizado = SYSUTCDATETIME() WHERE PedidoId = @PedidoId;');
+    return this.getById(pedidoId);
+  }
+
   async ultimoDeCliente(clienteId) {
     const pool = await getPool();
     const result = await pool
@@ -88,7 +98,7 @@ class SqlPedidoRepository extends IPedidoRepository {
     return mapPedido(resumen, result.recordsets[1] || [], result.recordsets[2] || []);
   }
 
-  async registrarPago(pedidoId, { metodo, monto, referencia = null, estado = 'pendiente' }) {
+  async registrarPago(pedidoId, { metodo, monto, referencia = null, estado = 'pendiente', moneda = null, montoMoneda = null, tasa = null, prima = null }) {
     const pool = await getPool();
     const result = await pool
       .request()
@@ -97,6 +107,10 @@ class SqlPedidoRepository extends IPedidoRepository {
       .input('Monto', sql.Decimal(12, 2), monto)
       .input('Referencia', sql.NVarChar(120), referencia)
       .input('Estado', sql.VarChar(20), estado)
+      .input('Moneda', sql.VarChar(10), moneda)
+      .input('MontoMoneda', sql.Decimal(12, 2), montoMoneda)
+      .input('Tasa', sql.Decimal(12, 4), tasa)
+      .input('Prima', sql.Decimal(5, 2), prima)
       .execute('dbo.sp_Pago_Registrar');
     const r = result.recordset[0];
     return { pagoId: r.PagoId, pedidoId: r.PedidoId, metodo: r.Metodo, monto: r.Monto, estado: r.Estado };

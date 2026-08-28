@@ -216,19 +216,92 @@ CREATE TABLE dbo.PedidosDetalle (
 GO
 
 /* ---------------------------------------------------------------------
+   FORMAS DE PAGO (catálogo dinámico)
+   --------------------------------------------------------------------- */
+IF OBJECT_ID('dbo.FormasPago', 'U') IS NULL
+CREATE TABLE dbo.FormasPago (
+    FormaPagoId      INT IDENTITY(1,1) NOT NULL,
+    Codigo           VARCHAR(10)      NOT NULL,            -- clave corta: 1, C, L, 6, 8
+    Nombre           NVARCHAR(60)     NOT NULL,
+    Orden            INT              NOT NULL CONSTRAINT DF_FormasPago_Orden DEFAULT 0,
+    RequiereReferencia BIT            NOT NULL CONSTRAINT DF_FormasPago_Ref DEFAULT 0,
+    EsPagoMultiple   BIT            NOT NULL CONSTRAINT DF_FormasPago_Mult DEFAULT 0,
+    Activo           BIT            NOT NULL CONSTRAINT DF_FormasPago_Activo DEFAULT 1,
+    Creado           DATETIME2(0)     NOT NULL CONSTRAINT DF_FormasPago_Creado DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_FormasPago PRIMARY KEY (FormaPagoId),
+    CONSTRAINT UQ_FormasPago_Codigo UNIQUE (Codigo)
+);
+GO
+
+/* ---------------------------------------------------------------------
+   MONEDAS (divisas con tasa y prima)
+   --------------------------------------------------------------------- */
+IF OBJECT_ID('dbo.Monedas', 'U') IS NULL
+CREATE TABLE dbo.Monedas (
+    MonedaId      INT IDENTITY(1,1) NOT NULL,
+    Codigo        VARCHAR(5)        NOT NULL,            -- USD, EUR, CAD
+    Nombre        NVARCHAR(40)      NOT NULL,
+    Simbolo       NVARCHAR(5)       NULL,
+    Tasa          DECIMAL(12,4)     NOT NULL CONSTRAINT DF_Monedas_Tasa DEFAULT 0,
+    Prima         DECIMAL(5,2)      NOT NULL CONSTRAINT DF_Monedas_Prima DEFAULT 0,
+    Orden         INT               NOT NULL CONSTRAINT DF_Monedas_Orden DEFAULT 0,
+    Activo        BIT               NOT NULL CONSTRAINT DF_Monedas_Activo DEFAULT 1,
+    Actualizado   DATETIME2(0)      NOT NULL CONSTRAINT DF_Monedas_Act DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_Monedas PRIMARY KEY (MonedaId),
+    CONSTRAINT UQ_Monedas_Codigo UNIQUE (Codigo)
+);
+GO
+
+/* ---------------------------------------------------------------------
    PAGOS
    --------------------------------------------------------------------- */
 IF OBJECT_ID('dbo.Pagos', 'U') IS NULL
 CREATE TABLE dbo.Pagos (
     PagoId        INT IDENTITY(1,1) NOT NULL,
     PedidoId      INT               NOT NULL,
-    Metodo        VARCHAR(30)       NOT NULL,  -- efectivo|transferencia|tarjeta|contraentrega
-    Monto         DECIMAL(12,2)     NOT NULL,
+    Metodo        VARCHAR(30)       NOT NULL,  -- nombre de la forma de pago
+    Monto         DECIMAL(12,2)     NOT NULL,  -- monto en moneda base
     Referencia    NVARCHAR(120)     NULL,
     Estado        VARCHAR(20)       NOT NULL CONSTRAINT DF_Pagos_Estado DEFAULT 'pendiente', -- pendiente|pagado|fallido
+    Moneda        VARCHAR(10)       NULL,      -- código de moneda si aplica
+    MontoMoneda   DECIMAL(12,2)     NULL,      -- monto original en moneda extranjera
+    Tasa          DECIMAL(12,4)     NULL,      -- tasa aplicada
+    Prima         DECIMAL(5,2)      NULL,      -- prima % aplicada
     Creado        DATETIME2(0)      NOT NULL CONSTRAINT DF_Pagos_Creado DEFAULT SYSUTCDATETIME(),
     CONSTRAINT PK_Pagos PRIMARY KEY (PagoId),
     CONSTRAINT FK_Pagos_Pedidos FOREIGN KEY (PedidoId)
+        REFERENCES dbo.Pedidos (PedidoId) ON DELETE CASCADE
+);
+GO
+
+-- Asegura columnas de moneda en despliegues existentes
+IF COL_LENGTH('dbo.Pagos', 'Moneda') IS NULL
+    ALTER TABLE dbo.Pagos ADD Moneda VARCHAR(10) NULL;
+IF COL_LENGTH('dbo.Pagos', 'MontoMoneda') IS NULL
+    ALTER TABLE dbo.Pagos ADD MontoMoneda DECIMAL(12,2) NULL;
+IF COL_LENGTH('dbo.Pagos', 'Tasa') IS NULL
+    ALTER TABLE dbo.Pagos ADD Tasa DECIMAL(12,4) NULL;
+IF COL_LENGTH('dbo.Pagos', 'Prima') IS NULL
+    ALTER TABLE dbo.Pagos ADD Prima DECIMAL(5,2) NULL;
+GO
+
+/* ---------------------------------------------------------------------
+   PEDIDO FACTURACIÓN ELECTRÓNICA (timbre / NCF)
+   --------------------------------------------------------------------- */
+IF OBJECT_ID('dbo.PedidoFacturacionElectronica', 'U') IS NULL
+CREATE TABLE dbo.PedidoFacturacionElectronica (
+    PedidoFacturacionId INT IDENTITY(1,1) NOT NULL,
+    PedidoId            INT               NOT NULL,
+    Ncf                 VARCHAR(20)       NULL,
+    TrackId             VARCHAR(40)       NULL,
+    Estado              VARCHAR(20)       NOT NULL CONSTRAINT DF_PedidoFe_Estado DEFAULT 'pendiente', -- pendiente|enviado|aceptado|rechazado
+    CodigoSeguridad     VARCHAR(10)       NULL,
+    UrlQr               NVARCHAR(500)     NULL,
+    RespuestaJson       NVARCHAR(MAX)     NULL,
+    Creado              DATETIME2(0)      NOT NULL CONSTRAINT DF_PedidoFe_Creado DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_PedidoFacturacionElectronica PRIMARY KEY (PedidoFacturacionId),
+    CONSTRAINT UQ_PedidoFacturacionElectronica_Pedido UNIQUE (PedidoId),
+    CONSTRAINT FK_PedidoFacturacionElectronica_Pedidos FOREIGN KEY (PedidoId)
         REFERENCES dbo.Pedidos (PedidoId) ON DELETE CASCADE
 );
 GO
