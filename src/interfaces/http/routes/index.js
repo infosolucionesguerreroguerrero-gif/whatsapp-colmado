@@ -63,6 +63,8 @@ function buildRoutes(container) {
   router.get('/cxc/cliente/:codigo', requireAuth, cuentasPorCobrar.resumenCliente);
   router.get('/cxc/antiguedad/:min/:max', requireAuth, cuentasPorCobrar.porAntiguedad);
   router.get('/cxc/exportar', requireAuth, cuentasPorCobrar.exportarExcel);
+  router.get('/cxc/exportar/csv', requireAuth, cuentasPorCobrar.exportarCsv);
+  router.post('/cxc/abono', requireAuth, cuentasPorCobrar.registrarAbono);
 
   // Bot / WhatsApp
   router.post('/bot/message', validate(schemas.mensajeBot), botHttp.message);

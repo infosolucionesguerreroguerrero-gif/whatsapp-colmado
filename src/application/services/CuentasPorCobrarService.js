@@ -6,8 +6,8 @@ const { ValidationError } = require('../../domain/errors/AppError');
  * Casos de uso de Cuentas por Cobrar Clientes.
  *
  * Traduce la lógica de la forma Delphi UFacXCob.pas al dominio del sistema.
- * Soporta consulta general/filtrada, totales por rangos de antigüedad y
- * exportación básica de datos.
+ * Soporta consulta general/filtrada, totales por rangos de antigüedad,
+ * colores por vencimiento, registro de abonos y exportación.
  */
 class CuentasPorCobrarService {
   constructor({ cuentasPorCobrarRepository, business }) {
@@ -17,55 +17,58 @@ class CuentasPorCobrarService {
 
   _ensureRepo() {
     if (!this.repo) {
-      throw new Error('CuentasPorCobrarService requiere DB_DRIVER=mssql y tablas legacy (fac_enca, pagosfacturas, clientes)');
+      throw new Error('CuentasPorCobrarService requiere un repositorio configurado');
     }
   }
 
   /**
    * Lista facturas a crédito aplicando filtros.
-   * @param {Object} filtro
-   * @param {string} [filtro.codCliente]
-   * @param {string} [filtro.vendedor]
-   * @param {string} [filtro.fechaDesde]
-   * @param {string} [filtro.fechaHasta]
-   * @param {number} [filtro.diasMin]
-   * @param {number} [filtro.diasMax]
-   * @param {string} [filtro.orden] codigo|nombre|fecha|factura|tipo
-   * @param {string} [filtro.formaPago]
    */
   async listar(filtro = {}) {
     this._ensureRepo();
-    if (filtro.fechaDesde && filtro.fechaHasta && new Date(filtro.fechaDesde) > new Date(filtro.fechaHasta)) {
-      throw new ValidationError('La fecha inicial no puede ser mayor que la fecha final');
-    }
+    this._validarFechas(filtro);
 
     const facturas = await this.repo.listarFacturas(filtro);
     const resumen = this._calcularResumen(facturas);
+    const conColor = facturas.map((f) => ({ ...f, color: this._colorPorDias(f.diasVencido) }));
 
-    return { facturas, resumen };
+    return { facturas: conColor, resumen };
   }
 
   /** Resumen de un cliente específico. */
   async resumenPorCliente(codCliente) {
     this._ensureRepo();
     const { facturas, resumen } = await this.listar({ codCliente });
-    const balanceTotal = await this.repo.balancePorCliente(codCliente);
-    const cliente = await this.repo.obtenerCliente(codCliente);
+    const [balanceTotal, cliente] = await Promise.all([
+      this.repo.balancePorCliente(codCliente),
+      this.repo.obtenerCliente(codCliente),
+    ]);
     return { cliente, facturas, resumen, balanceTotal };
   }
 
   /** Filtra por rango de días de antigüedad (equivalente a BUSCAXCOLOR). */
   async filtrarPorDias(diasMin, diasMax, filtro = {}) {
+    this._ensureRepo();
     return this.listar({ ...filtro, diasMin, diasMax });
   }
 
   /** Recalcula días vencidos y devuelve facturas con totales actualizados. */
   async actualizar() {
-    const { facturas, resumen } = await this.listar();
-    return { facturas, resumen };
+    this._ensureRepo();
+    return this.listar();
   }
 
-  /** Exporta la lista a formato plano apto para Excel. */
+  /** Registra un abono sobre una factura. */
+  async registrarAbono(nroFact, { monto, metodo = 'ABONO', referencia = null, fecha = new Date() }) {
+    this._ensureRepo();
+    if (!nroFact) throw new ValidationError('El número de factura es requerido');
+    if (!monto || Number(monto) <= 0) throw new ValidationError('El monto del abono debe ser mayor a cero');
+    const abono = await this.repo.registrarAbono(nroFact, { monto, metodo, referencia, fecha });
+    const { facturas, resumen } = await this.listar();
+    return { abono, facturas, resumen };
+  }
+
+  /** Exporta la lista a formato plano apto para Excel/JSON. */
   exportarExcel(facturas) {
     return facturas.map((f) => ({
       Factura: f.nroFact,
@@ -76,14 +79,36 @@ class CuentasPorCobrarService {
       Descuento: f.descuento,
       ITBIS: f.itebis,
       Neto: f.neto,
+      Abono: f.abono,
+      Devolucion: f.devolucion,
+      DesctoPago: f.desctoPago,
       Balance: f.balFact,
+      'Días Vencido': f.diasVencido,
+      Color: this._colorPorDias(f.diasVencido).color,
     }));
   }
 
-  _calcularResumen(facturas) {
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+  /** Devuelve un CSV simple con las columnas del grid. */
+  exportarCsv(facturas) {
+    const rows = this.exportarExcel(facturas);
+    if (!rows.length) return '';
+    const headers = Object.keys(rows[0]);
+    const lines = [
+      headers.join(','),
+      ...rows.map((r) => headers.map((h) => this._csvCell(r[h])).join(',')),
+    ];
+    return lines.join('\n');
+  }
 
+  _validarFechas(filtro) {
+    if (filtro.fechaDesde && filtro.fechaHasta) {
+      const d1 = new Date(filtro.fechaDesde);
+      const d2 = new Date(filtro.fechaHasta);
+      if (d1 > d2) throw new ValidationError('La fecha inicial no puede ser mayor que la fecha final');
+    }
+  }
+
+  _calcularResumen(facturas) {
     const totales = {
       totalXCobrar: 0,
       a14: 0,
@@ -112,6 +137,8 @@ class CuentasPorCobrarService {
       if (dias > 0) totales.totalVencido += bal;
     }
 
+    const totalA15a90 = totales.a15 + totales.a30 + totales.a45 + totales.a60 + totales.a90;
+
     return {
       totalXCobrar: this._fmt(totales.totalXCobrar),
       totalVencido: this._fmt(totales.totalVencido),
@@ -121,9 +148,29 @@ class CuentasPorCobrarService {
       a45: this._fmt(totales.a45),
       a60: this._fmt(totales.a60),
       a90: this._fmt(totales.a90),
-      totalA15a90: this._fmt(totales.a15 + totales.a30 + totales.a45 + totales.a60 + totales.a90),
+      totalA15a90: this._fmt(totalA15a90),
+      raw: {
+        totalXCobrar: totales.totalXCobrar,
+        totalVencido: totales.totalVencido,
+        a14: totales.a14,
+        a15: totales.a15,
+        a30: totales.a30,
+        a45: totales.a45,
+        a60: totales.a60,
+        a90: totales.a90,
+        totalA15a90,
+      },
       currency: this.currency,
     };
+  }
+
+  _colorPorDias(dias) {
+    if (dias >= 90) return { color: 'red', bg: '#ffcccc' };
+    if (dias >= 60) return { color: 'gray', bg: '#e0e0e0' };
+    if (dias >= 45) return { color: 'yellow', bg: '#fff9c4' };
+    if (dias >= 30) return { color: 'blue', bg: '#cce5ff' };
+    if (dias >= 15) return { color: 'green', bg: '#ccffcc' };
+    return { color: 'white', bg: '#ffffff' };
   }
 
   _diasVencido(fechaFact) {
@@ -135,7 +182,13 @@ class CuentasPorCobrarService {
   }
 
   _fmt(value) {
-    return Number(value).toLocaleString('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 });
+    return `${this.currency} ${Number(value).toFixed(2)}`;
+  }
+
+  _csvCell(value) {
+    const s = value == null ? '' : String(value);
+    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
   }
 }
 

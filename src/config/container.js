@@ -9,6 +9,7 @@ const MemoryProductoRepository = require('../infrastructure/db/repositories/memo
 const MemoryClienteRepository = require('../infrastructure/db/repositories/memory/MemoryClienteRepository');
 const MemoryPedidoRepository = require('../infrastructure/db/repositories/memory/MemoryPedidoRepository');
 const MemoryCarritoRepository = require('../infrastructure/db/repositories/memory/MemoryCarritoRepository');
+const MemoryCuentasPorCobrarRepository = require('../infrastructure/db/repositories/memory/MemoryCuentasPorCobrarRepository');
 const SqlProductoRepository = require('../infrastructure/db/repositories/sql/SqlProductoRepository');
 const SqlClienteRepository = require('../infrastructure/db/repositories/sql/SqlClienteRepository');
 const SqlPedidoRepository = require('../infrastructure/db/repositories/sql/SqlPedidoRepository');
@@ -49,13 +50,13 @@ function buildContainer({ whatsappInteractive = true } = {}) {
     productoRepository = new SqlProductoRepository();
     clienteRepository = new SqlClienteRepository();
     pedidoRepository = new SqlPedidoRepository();
-    cuentasPorCobrarRepository = new SqlCuentasPorCobrarRepository();
+    cuentasPorCobrarRepository = new SqlCuentasPorCobrarRepository({ schema: env.db.cxcSchema });
   } else {
     logger.info('Driver de BD: memoria (demo). Configura DB_DRIVER=mssql para producción.');
     productoRepository = new MemoryProductoRepository();
     clienteRepository = new MemoryClienteRepository();
     pedidoRepository = new MemoryPedidoRepository();
-    cuentasPorCobrarRepository = null;
+    cuentasPorCobrarRepository = new MemoryCuentasPorCobrarRepository();
   }
   const carritoRepository = new MemoryCarritoRepository();
 

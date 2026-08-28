@@ -6,7 +6,7 @@ const asyncHandler = require('../middlewares/asyncHandler');
  * Controlador REST de Cuentas por Cobrar Clientes.
  *
  * Equivalente a la forma Delphi UFacXCob: consulta, filtrado por antigüedad,
- * resumen por cliente y exportación básica a Excel/JSON.
+ * resumen por cliente, registro de abonos y exportación a CSV/JSON.
  */
 class CuentasPorCobrarController {
   constructor({ cuentasPorCobrarService }) {
@@ -36,8 +36,22 @@ class CuentasPorCobrarController {
       res.json({ ok: true, data: rows });
     });
 
+    this.exportarCsv = asyncHandler(async (req, res) => {
+      const { facturas } = await this.service.listar(this._filtro(req.query));
+      const csv = this.service.exportarCsv(facturas);
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="cxc.csv"');
+      res.send(csv);
+    });
+
     this.actualizar = asyncHandler(async (req, res) => {
       const data = await this.service.actualizar();
+      res.json({ ok: true, data });
+    });
+
+    this.registrarAbono = asyncHandler(async (req, res) => {
+      const { nroFact, monto, metodo, referencia, fecha } = req.body;
+      const data = await this.service.registrarAbono(nroFact, { monto, metodo, referencia, fecha });
       res.json({ ok: true, data });
     });
   }
