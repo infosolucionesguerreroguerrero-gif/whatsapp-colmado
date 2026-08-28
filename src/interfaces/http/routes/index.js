@@ -7,6 +7,7 @@ const CatalogoController = require('../controllers/CatalogoController');
 const PedidoController = require('../controllers/PedidoController');
 const ClienteController = require('../controllers/ClienteController');
 const ImpresionController = require('../controllers/ImpresionController');
+const CuentasPorCobrarController = require('../controllers/CuentasPorCobrarController');
 const BotHttpController = require('../controllers/BotController');
 
 const { requireAuth } = require('../middlewares/auth');
@@ -26,6 +27,7 @@ function buildRoutes(container) {
   const pedido = new PedidoController({ pedidoService: services.pedidoService, clienteService: services.clienteService });
   const cliente = new ClienteController({ clienteService: services.clienteService });
   const impresion = new ImpresionController({ pedidoService: services.pedidoService });
+  const cuentasPorCobrar = new CuentasPorCobrarController({ cuentasPorCobrarService: services.cuentasPorCobrarService });
   const botHttp = new BotHttpController({ botController, whatsappProvider });
 
   // Salud
@@ -54,6 +56,15 @@ function buildRoutes(container) {
 
   // Impresión
   router.post('/imprimir', requireAuth, validate(schemas.imprimir), impresion.imprimir);
+
+  // Cuentas por cobrar
+  router.get('/cxc', requireAuth, cuentasPorCobrar.listar);
+  router.get('/cxc/actualizar', requireAuth, cuentasPorCobrar.actualizar);
+  router.get('/cxc/cliente/:codigo', requireAuth, cuentasPorCobrar.resumenCliente);
+  router.get('/cxc/antiguedad/:min/:max', requireAuth, cuentasPorCobrar.porAntiguedad);
+  router.get('/cxc/exportar', requireAuth, cuentasPorCobrar.exportarExcel);
+  router.get('/cxc/exportar/csv', requireAuth, cuentasPorCobrar.exportarCsv);
+  router.post('/cxc/abono', requireAuth, cuentasPorCobrar.registrarAbono);
 
   // Bot / WhatsApp
   router.post('/bot/message', validate(schemas.mensajeBot), botHttp.message);

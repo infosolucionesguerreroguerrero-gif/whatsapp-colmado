@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cuentas por Cobrar Clientes</title>
+  <style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { margin: 0; padding: 16px; background: #f5f5f5; }
+    h1 { font-size: 1.4rem; margin: 0 0 12px; color: #333; }
+    .panel { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 12px; margin-bottom: 12px; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 8px; }
+    label { font-size: 0.85rem; color: #555; }
+    input, select, button { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+    button { background: #2d6da8; color: #fff; cursor: pointer; border: none; }
+    button:hover { background: #1f517d; }
+    button.secondary { background: #6c757d; }
+    .grid { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .grid th, .grid td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+    .grid th { background: #e9e9e9; }
+    .grid tr:hover { filter: brightness(0.95); }
+    .totales { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 10px; text-align: center; }
+    .card label { display: block; font-size: 0.75rem; color: #666; margin-bottom: 4px; }
+    .card strong { font-size: 1rem; color: #333; }
+    .login { max-width: 320px; margin: 40px auto; }
+    .hidden { display: none; }
+    .error { color: #c00; font-size: 0.85rem; }
+    .actions { margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <div id="login" class="panel login">
+    <h1>Iniciar sesión</h1>
+    <div class="row">
+      <input id="usuario" placeholder="Usuario" value="admin" />
+      <input id="password" type="password" placeholder="Contraseña" value="admin" />
+      <button id="btnLogin">Entrar</button>
+    </div>
+    <p class="error" id="loginError"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <h1>CUENTAS POR COBRAR CLIENTES</h1>
+
+    <div class="panel">
+      <div class="row">
+        <label>Código cliente: <input id="codCliente" type="text" /></label>
+        <label>Vendedor: <input id="vendedor" type="text" /></label>
+        <label>Desde: <input id="fechaDesde" type="date" /></label>
+        <label>Hasta: <input id="fechaHasta" type="date" /></label>
+        <label>Orden:
+          <select id="orden">
+            <option value="nombre">Nombre</option>
+            <option value="codigo">Código</option>
+            <option value="fecha">Fecha</option>
+            <option value="factura">Factura</option>
+            <option value="tipo">Tipo</option>
+          </select>
+        </label>
+      </div>
+      <div class="row actions">
+        <button id="btnConsultar">Consultar</button>
+        <button id="btnActualizar" class="secondary">Actualizar</button>
+        <button id="btnExportarCsv" class="secondary">Exportar CSV</button>
+        <button id="btnAbono" class="secondary">Realizar Abono</button>
+      </div>
+      <div class="row">
+        <span>Rangos:</span>
+        <button class="secondary" data-min="0" data-max="15">0 a 15</button>
+        <button class="secondary" data-min="15" data-max="30">15 a 30</button>
+        <button class="secondary" data-min="30" data-max="45">30 a 45</button>
+        <button class="secondary" data-min="45" data-max="60">45 a 60</button>
+        <button class="secondary" data-min="60" data-max="90">60 a 90</button>
+        <button class="secondary" data-min="90" data-max="1000">90 y +</button>
+      </div>
+      <p class="error" id="appError"></p>
+    </div>
+
+    <div class="panel totales" id="resumen"></div>
+
+    <div class="panel">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th>Factura</th>
+            <th>Fecha</th>
+            <th>Código</th>
+            <th>Nombre</th>
+            <th>Total</th>
+            <th>Descuento</th>
+            <th>ITBIS</th>
+            <th>Neto</th>
+            <th>Abono</th>
+            <th>Balance</th>
+            <th>Plazo</th>
+            <th>NCF</th>
+            <th>Días</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div id="abonoModal" class="panel hidden" style="max-width: 320px;">
+      <h2>Realizar Abono</h2>
+      <label>Factura: <input id="abonoFact" type="text" /></label><br /><br />
+      <label>Monto: <input id="abonoMonto" type="number" step="0.01" /></label><br /><br />
+      <label>Método: <input id="abonoMetodo" type="text" value="ABONO" /></label><br /><br />
+      <label>Referencia: <input id="abonoRef" type="text" /></label><br /><br />
+      <button id="btnGuardarAbono">Guardar</button>
+      <button id="btnCancelarAbono" class="secondary">Cancelar</button>
+    </div>
+  </div>
+
+  <script src="/cxc.js"></script>
+</body>
+</html>

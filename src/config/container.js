@@ -9,9 +9,11 @@ const MemoryProductoRepository = require('../infrastructure/db/repositories/memo
 const MemoryClienteRepository = require('../infrastructure/db/repositories/memory/MemoryClienteRepository');
 const MemoryPedidoRepository = require('../infrastructure/db/repositories/memory/MemoryPedidoRepository');
 const MemoryCarritoRepository = require('../infrastructure/db/repositories/memory/MemoryCarritoRepository');
+const MemoryCuentasPorCobrarRepository = require('../infrastructure/db/repositories/memory/MemoryCuentasPorCobrarRepository');
 const SqlProductoRepository = require('../infrastructure/db/repositories/sql/SqlProductoRepository');
 const SqlClienteRepository = require('../infrastructure/db/repositories/sql/SqlClienteRepository');
 const SqlPedidoRepository = require('../infrastructure/db/repositories/sql/SqlPedidoRepository');
+const SqlCuentasPorCobrarRepository = require('../infrastructure/db/repositories/sql/SqlCuentasPorCobrarRepository');
 
 // AI / Printing
 const { createNluEngine } = require('../infrastructure/ai/NluEngine');
@@ -27,6 +29,7 @@ const CatalogoService = require('../application/services/CatalogoService');
 const ClienteService = require('../application/services/ClienteService');
 const CarritoService = require('../application/services/CarritoService');
 const PedidoService = require('../application/services/PedidoService');
+const CuentasPorCobrarService = require('../application/services/CuentasPorCobrarService');
 
 // Bot
 const BotController = require('../interfaces/bot/BotController');
@@ -41,17 +44,19 @@ function buildContainer({ whatsappInteractive = true } = {}) {
   const eventBus = new EventEmitter();
 
   // ---- Repositorios ----
-  let productoRepository, clienteRepository, pedidoRepository;
+  let productoRepository, clienteRepository, pedidoRepository, cuentasPorCobrarRepository;
   if (env.db.driver === 'mssql') {
     logger.info('Driver de BD: SQL Server');
     productoRepository = new SqlProductoRepository();
     clienteRepository = new SqlClienteRepository();
     pedidoRepository = new SqlPedidoRepository();
+    cuentasPorCobrarRepository = new SqlCuentasPorCobrarRepository({ schema: env.db.cxcSchema });
   } else {
     logger.info('Driver de BD: memoria (demo). Configura DB_DRIVER=mssql para producción.');
     productoRepository = new MemoryProductoRepository();
     clienteRepository = new MemoryClienteRepository();
     pedidoRepository = new MemoryPedidoRepository();
+    cuentasPorCobrarRepository = new MemoryCuentasPorCobrarRepository();
   }
   const carritoRepository = new MemoryCarritoRepository();
 
@@ -63,6 +68,10 @@ function buildContainer({ whatsappInteractive = true } = {}) {
   const catalogoService = new CatalogoService({ productoRepository });
   const clienteService = new ClienteService({ clienteRepository });
   const carritoService = new CarritoService({ carritoRepository, catalogoService, business: env.business });
+  const cuentasPorCobrarService = new CuentasPorCobrarService({
+    cuentasPorCobrarRepository,
+    business: env.business,
+  });
   const pedidoService = new PedidoService({
     pedidoRepository,
     clienteRepository,
@@ -102,8 +111,8 @@ function buildContainer({ whatsappInteractive = true } = {}) {
   return {
     env,
     eventBus,
-    repositories: { productoRepository, clienteRepository, pedidoRepository, carritoRepository },
-    services: { catalogoService, clienteService, carritoService, pedidoService },
+    repositories: { productoRepository, clienteRepository, pedidoRepository, carritoRepository, cuentasPorCobrarRepository },
+    services: { catalogoService, clienteService, carritoService, pedidoService, cuentasPorCobrarService },
     nlu,
     printerService,
     botController,

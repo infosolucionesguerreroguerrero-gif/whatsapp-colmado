@@ -40,6 +40,7 @@ const env = {
     trustServerCertificate: bool(process.env.DB_TRUST_SERVER_CERTIFICATE, true),
     poolMax: num(process.env.DB_POOL_MAX, 10),
     poolMin: num(process.env.DB_POOL_MIN, 0),
+    cxcSchema: process.env.CXC_SCHEMA || 'auto',
   },
 
   whatsapp: {
