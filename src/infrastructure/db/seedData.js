@@ -61,4 +61,21 @@ const productos = [
   };
 });
 
-module.exports = { categorias, productos };
+const formasPago = [
+  { formaPagoId: 1, codigo: '1', nombre: 'Efectivo', orden: 1, requiereReferencia: false, esPagoMultiple: false, activo: true },
+  { formaPagoId: 2, codigo: '2', nombre: 'Transferencia', orden: 2, requiereReferencia: true, esPagoMultiple: false, activo: true },
+  { formaPagoId: 3, codigo: '3', nombre: 'Tarjeta', orden: 3, requiereReferencia: true, esPagoMultiple: false, activo: true },
+  { formaPagoId: 4, codigo: '4', nombre: 'Contra entrega', orden: 4, requiereReferencia: false, esPagoMultiple: false, activo: true },
+  { formaPagoId: 5, codigo: '5', nombre: 'Cheque', orden: 5, requiereReferencia: true, esPagoMultiple: false, activo: true },
+  { formaPagoId: 6, codigo: '6', nombre: 'Pago múltiple', orden: 6, requiereReferencia: false, esPagoMultiple: true, activo: true },
+  { formaPagoId: 7, codigo: 'C', nombre: 'Crédito', orden: 7, requiereReferencia: false, esPagoMultiple: false, activo: true },
+  { formaPagoId: 8, codigo: '8', nombre: 'Nota de crédito', orden: 8, requiereReferencia: false, esPagoMultiple: false, activo: true },
+];
+
+const monedas = [
+  { monedaId: 1, codigo: 'USD', nombre: 'Dólar estadounidense', simbolo: 'US$', tasa: 0, prima: 0, orden: 1, activo: true },
+  { monedaId: 2, codigo: 'EUR', nombre: 'Euro', simbolo: '€', tasa: 0, prima: 0, orden: 2, activo: true },
+  { monedaId: 3, codigo: 'CAD', nombre: 'Dólar canadiense', simbolo: 'C$', tasa: 0, prima: 0, orden: 3, activo: true },
+];
+
+module.exports = { categorias, productos, formasPago, monedas };

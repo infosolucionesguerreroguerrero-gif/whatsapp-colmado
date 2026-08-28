@@ -63,7 +63,7 @@ const messages = {
     return txt;
   },
 
-  confirmacion(carrito, cliente, currency) {
+  confirmacion(carrito, cliente, currency, formasPago = []) {
     const dir = cliente.direccionPrincipal;
     let txt = '🧾 *CONFIRMACIÓN DE PEDIDO*\n\n';
     txt += `Cliente: ${cliente.nombre || 'N/D'}\n`;
@@ -77,8 +77,9 @@ const messages = {
     txt += `Envío: ${format(carrito.envio, currency)}\n`;
     if (carrito.itbis > 0) txt += `ITBIS: ${format(carrito.itbis, currency)}\n`;
     txt += `*TOTAL: ${format(carrito.total, currency)}*\n\n`;
-    txt += 'Forma de pago:\n1. Efectivo\n2. Transferencia\n3. Tarjeta\n4. Contra entrega\n\n';
-    txt += 'Escribe el número de tu forma de pago para confirmar, o "cancelar".';
+    txt += 'Forma de pago:\n';
+    txt += formasPago.map((f, i) => `${i + 1}. ${f.nombre}`).join('\n');
+    txt += '\n\nEscribe el número de tu forma de pago para confirmar, o "cancelar".';
     return txt;
   },
 

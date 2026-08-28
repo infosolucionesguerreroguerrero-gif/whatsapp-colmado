@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diálogo de Pago</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 1rem;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+    .selector {
+      max-width: 720px;
+      width: 100%;
+      margin-bottom: 1rem;
+      padding: 1rem;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .selector label { font-weight: 600; margin-right: 0.5rem; }
+    .selector input { padding: 0.45rem; border: 1px solid #d1d5db; border-radius: 6px; width: 120px; }
+  </style>
+</head>
+<body>
+  <div style="width:100%;max-width:720px">
+    <div class="selector">
+      <label for="pedido-id">Pedido ID</label>
+      <input id="pedido-id" type="number" placeholder="1001" value="1000">
+      <button id="cargar" style="padding:0.45rem 1rem;border:none;border-radius:6px;background:#3b82f6;color:#fff;cursor:pointer">Cargar</button>
+    </div>
+    <dialogo-pago id="dialogo" pedido-id=""></dialogo-pago>
+  </div>
+
+  <script type="module">
+    import './components/dialogo-pago.js';
+
+    const input = document.getElementById('pedido-id');
+    const cargar = document.getElementById('cargar');
+    const dialogo = document.getElementById('dialogo');
+
+    cargar.addEventListener('click', () => {
+      dialogo.setAttribute('pedido-id', input.value);
+    });
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') cargar.click();
+    });
+  </script>
+</body>
+</html>
