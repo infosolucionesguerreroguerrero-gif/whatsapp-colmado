@@ -53,4 +53,26 @@ const mensajeBot = Joi.object({
   type: Joi.string().valid('text', 'audio', 'image').default('text'),
 });
 
-module.exports = { login, crearCliente, crearPedido, actualizarEstado, imprimir, mensajeBot };
+const formaPagoRecibo = Joi.object({
+  tipo: Joi.string().valid('efectivo', 'cheque', 'transferencia', 'tarjeta', 'otro').required(),
+  monto: Joi.number().positive().required(),
+  referencia: Joi.string().max(60).allow(null, ''),
+  banco: Joi.string().max(60).allow(null, ''),
+});
+
+const aplicacionRecibo = Joi.object({
+  nroFact: Joi.string().max(30).required(),
+  montoAplicado: Joi.number().positive().required(),
+});
+
+const crearRecibo = Joi.object({
+  codCliente: Joi.string().max(30).required(),
+  nombreCliente: Joi.string().max(150).allow(null, ''),
+  concepto: Joi.string().max(300).allow(null, ''),
+  formasPago: Joi.array().items(formaPagoRecibo).min(1).required(),
+  aplicaciones: Joi.array().items(aplicacionRecibo).default([]),
+  fecha: Joi.date().optional(),
+  usuario: Joi.string().max(60).allow(null, ''),
+});
+
+module.exports = { login, crearCliente, crearPedido, actualizarEstado, imprimir, mensajeBot, crearRecibo };

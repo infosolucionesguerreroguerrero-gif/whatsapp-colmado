@@ -10,10 +10,12 @@ const MemoryClienteRepository = require('../infrastructure/db/repositories/memor
 const MemoryPedidoRepository = require('../infrastructure/db/repositories/memory/MemoryPedidoRepository');
 const MemoryCarritoRepository = require('../infrastructure/db/repositories/memory/MemoryCarritoRepository');
 const MemoryCuentasPorCobrarRepository = require('../infrastructure/db/repositories/memory/MemoryCuentasPorCobrarRepository');
+const MemoryReciboIngresoRepository = require('../infrastructure/db/repositories/memory/MemoryReciboIngresoRepository');
 const SqlProductoRepository = require('../infrastructure/db/repositories/sql/SqlProductoRepository');
 const SqlClienteRepository = require('../infrastructure/db/repositories/sql/SqlClienteRepository');
 const SqlPedidoRepository = require('../infrastructure/db/repositories/sql/SqlPedidoRepository');
 const SqlCuentasPorCobrarRepository = require('../infrastructure/db/repositories/sql/SqlCuentasPorCobrarRepository');
+const SqlReciboIngresoRepository = require('../infrastructure/db/repositories/sql/SqlReciboIngresoRepository');
 
 // AI / Printing
 const { createNluEngine } = require('../infrastructure/ai/NluEngine');
@@ -30,6 +32,7 @@ const ClienteService = require('../application/services/ClienteService');
 const CarritoService = require('../application/services/CarritoService');
 const PedidoService = require('../application/services/PedidoService');
 const CuentasPorCobrarService = require('../application/services/CuentasPorCobrarService');
+const ReciboIngresoService = require('../application/services/ReciboIngresoService');
 
 // Bot
 const BotController = require('../interfaces/bot/BotController');
@@ -44,19 +47,21 @@ function buildContainer({ whatsappInteractive = true } = {}) {
   const eventBus = new EventEmitter();
 
   // ---- Repositorios ----
-  let productoRepository, clienteRepository, pedidoRepository, cuentasPorCobrarRepository;
+  let productoRepository, clienteRepository, pedidoRepository, cuentasPorCobrarRepository, reciboIngresoRepository;
   if (env.db.driver === 'mssql') {
     logger.info('Driver de BD: SQL Server');
     productoRepository = new SqlProductoRepository();
     clienteRepository = new SqlClienteRepository();
     pedidoRepository = new SqlPedidoRepository();
     cuentasPorCobrarRepository = new SqlCuentasPorCobrarRepository({ schema: env.db.cxcSchema });
+    reciboIngresoRepository = new SqlReciboIngresoRepository();
   } else {
     logger.info('Driver de BD: memoria (demo). Configura DB_DRIVER=mssql para producción.');
     productoRepository = new MemoryProductoRepository();
     clienteRepository = new MemoryClienteRepository();
     pedidoRepository = new MemoryPedidoRepository();
     cuentasPorCobrarRepository = new MemoryCuentasPorCobrarRepository();
+    reciboIngresoRepository = new MemoryReciboIngresoRepository();
   }
   const carritoRepository = new MemoryCarritoRepository();
 
@@ -69,6 +74,11 @@ function buildContainer({ whatsappInteractive = true } = {}) {
   const clienteService = new ClienteService({ clienteRepository });
   const carritoService = new CarritoService({ carritoRepository, catalogoService, business: env.business });
   const cuentasPorCobrarService = new CuentasPorCobrarService({
+    cuentasPorCobrarRepository,
+    business: env.business,
+  });
+  const reciboIngresoService = new ReciboIngresoService({
+    reciboIngresoRepository,
     cuentasPorCobrarRepository,
     business: env.business,
   });
@@ -111,8 +121,8 @@ function buildContainer({ whatsappInteractive = true } = {}) {
   return {
     env,
     eventBus,
-    repositories: { productoRepository, clienteRepository, pedidoRepository, carritoRepository, cuentasPorCobrarRepository },
-    services: { catalogoService, clienteService, carritoService, pedidoService, cuentasPorCobrarService },
+    repositories: { productoRepository, clienteRepository, pedidoRepository, carritoRepository, cuentasPorCobrarRepository, reciboIngresoRepository },
+    services: { catalogoService, clienteService, carritoService, pedidoService, cuentasPorCobrarService, reciboIngresoService },
     nlu,
     printerService,
     botController,
