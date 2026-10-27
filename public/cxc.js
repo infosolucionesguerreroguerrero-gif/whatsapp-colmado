@@ -173,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('#btnExportarCsv').addEventListener('click', exportarCsv);
   $('#btnAbono').addEventListener('click', () => show('abonoModal', true));
+  $('#btnRecibo').addEventListener('click', () => { window.location.href = '/recibo.html'; });
   $('#btnCancelarAbono').addEventListener('click', () => show('abonoModal', false));
   $('#btnGuardarAbono').addEventListener('click', guardarAbono);
 
