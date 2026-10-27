@@ -72,6 +72,7 @@ const env = {
 
   business: {
     name: process.env.BUSINESS_NAME || 'COLMADO LA ESPERANZA',
+    rnc: process.env.BUSINESS_RNC || '000-0000000-0',
     phone: process.env.BUSINESS_PHONE || '809-000-0000',
     address: process.env.BUSINESS_ADDRESS || 'Calle Principal #1',
     currency: process.env.CURRENCY || 'RD$',

@@ -8,6 +8,7 @@ const PedidoController = require('../controllers/PedidoController');
 const ClienteController = require('../controllers/ClienteController');
 const ImpresionController = require('../controllers/ImpresionController');
 const CuentasPorCobrarController = require('../controllers/CuentasPorCobrarController');
+const ReciboIngresoController = require('../controllers/ReciboIngresoController');
 const BotHttpController = require('../controllers/BotController');
 
 const { requireAuth } = require('../middlewares/auth');
@@ -28,6 +29,7 @@ function buildRoutes(container) {
   const cliente = new ClienteController({ clienteService: services.clienteService });
   const impresion = new ImpresionController({ pedidoService: services.pedidoService });
   const cuentasPorCobrar = new CuentasPorCobrarController({ cuentasPorCobrarService: services.cuentasPorCobrarService });
+  const reciboIngreso = new ReciboIngresoController({ reciboIngresoService: services.reciboIngresoService });
   const botHttp = new BotHttpController({ botController, whatsappProvider });
 
   // Salud
@@ -65,6 +67,13 @@ function buildRoutes(container) {
   router.get('/cxc/exportar', requireAuth, cuentasPorCobrar.exportarExcel);
   router.get('/cxc/exportar/csv', requireAuth, cuentasPorCobrar.exportarCsv);
   router.post('/cxc/abono', requireAuth, cuentasPorCobrar.registrarAbono);
+
+  // Recibos de ingresos (talonario + asiento contable)
+  router.get('/recibos', requireAuth, reciboIngreso.listar);
+  router.get('/recibos/formas-pago', requireAuth, reciboIngreso.formasPago);
+  router.get('/recibos/:numero', requireAuth, reciboIngreso.obtener);
+  router.post('/recibos', requireAuth, validate(schemas.crearRecibo), reciboIngreso.crear);
+  router.post('/recibos/:numero/anular', requireAuth, reciboIngreso.anular);
 
   // Bot / WhatsApp
   router.post('/bot/message', validate(schemas.mensajeBot), botHttp.message);

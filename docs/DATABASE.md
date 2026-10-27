@@ -8,6 +8,7 @@ Scripts en [`../sql/`](../sql/), ejecutar en orden:
 4. `04_stored_procedures.sql` — procedimientos almacenados.
 5. `05_triggers.sql` — triggers.
 6. `06_seed.sql` — datos iniciales (estados, categorías, productos, etc.).
+7. `07_recibos_ingresos.sql` — recibos de ingresos y asientos contables.
 
 O automáticamente: `npm run db:setup` (requiere `DB_DRIVER=mssql`).
 
@@ -29,6 +30,11 @@ O automáticamente: `npm run db:setup` (requiere `DB_DRIVER=mssql`).
 | `PedidoEstadoHistorial` | Trazabilidad de cambios de estado. |
 | `Impresoras` | Configuración de impresoras térmicas. |
 | `Logs` | Auditoría de eventos del sistema. |
+| `RecibosIngresos` | Recibos de ingresos (talonario): cabecera, totales y estado. |
+| `ReciboFormasPago` | Desglose por forma de pago de cada recibo. |
+| `ReciboAplicaciones` | Facturas a las que se aplicó cada recibo. |
+| `AsientosContables` | Asiento contable generado por recibo (cabecera). |
+| `AsientoDetalle` | Líneas débito/crédito del asiento. |
 
 ## Procedimientos almacenados
 
